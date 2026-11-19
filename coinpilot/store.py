@@ -77,6 +77,33 @@ CREATE TABLE IF NOT EXISTS candidates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_candidates_ts ON candidates (ts);
+
+CREATE TABLE IF NOT EXISTS sightings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    token_address TEXT NOT NULL,
+    symbol TEXT,
+    price REAL,
+    score REAL,
+    liquidity REAL,
+    volume REAL,
+    age_minutes REAL,
+    corroboration INTEGER DEFAULT 0,
+    outcome REAL,
+    studied_at REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sightings_token ON sightings (token_address);
+CREATE INDEX IF NOT EXISTS idx_sightings_outcome ON sightings (outcome);
+
+CREATE TABLE IF NOT EXISTS adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    kind TEXT NOT NULL,
+    value_from REAL,
+    value_to REAL,
+    reason TEXT
+);
 """
 
 
@@ -99,6 +126,11 @@ def connect(path: str | Path) -> sqlite3.Connection:
     if "credibility" not in candidate_columns:
         try:
             connection.execute("ALTER TABLE candidates ADD COLUMN credibility TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if "flows" not in candidate_columns:
+        try:
+            connection.execute("ALTER TABLE candidates ADD COLUMN flows TEXT")
         except sqlite3.OperationalError:
             pass
     connection.commit()
@@ -315,13 +347,14 @@ def record_candidates(connection: sqlite3.Connection, candidates: list[dict], ts
                 "seen",
                 "",
                 str(item.get("credibility") or ""),
+                str(item.get("flows") or ""),
             )
         )
     if rows:
         connection.executemany(
             "INSERT INTO candidates "
             "(ts, token_address, symbol, score, liquidity_usd, volume_h24, age_minutes, change_h24, "
-            "corroboration, sources, status, reason, credibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "corroboration, sources, status, reason, credibility, flows) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
         connection.commit()
@@ -389,3 +422,21 @@ def win_stats(connection: sqlite3.Connection) -> dict:
         "avg_win": float(row["avg_win"] or 0.0),
         "avg_loss": float(row["avg_loss"] or 0.0),
     }
+
+
+def record_adjustment(connection, kind: str, value_from: float, value_to: float, reason: str = "") -> None:
+    """Log one self-change made by the auditor, with its evidence."""
+
+    connection.execute(
+        "INSERT INTO adjustments (ts, kind, value_from, value_to, reason) VALUES (?, ?, ?, ?, ?)",
+        (time.time(), kind, float(value_from), float(value_to), (reason or "")[:500]),
+    )
+    connection.commit()
+
+
+def recent_adjustments(connection, limit: int = 12) -> list[dict]:
+    rows = connection.execute(
+        "SELECT ts, kind, value_from, value_to, reason FROM adjustments ORDER BY ts DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]

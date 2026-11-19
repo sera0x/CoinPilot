@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from coinpilot import config, market, store
+from coinpilot import auditor, config, market, memory, store
 from coinpilot.llm import LLM
 
 SUBAGENT_TIMEOUT = 180
@@ -394,6 +394,24 @@ def cycle(settings: dict, connection) -> dict:
         opened: list[dict] = []
     else:
         opened = find_entries(settings, connection)
+
+    # The self-improvement loop: study what happened to old sightings, then let
+    # the auditor find flaws in its own numbers and adjust within hard bounds.
+    try:
+        report = memory.study(connection, chain=str(settings.get("chain") or "solana"))
+        if report.get("studied") or report.get("pruned"):
+            log(
+                f"archive: studied {report['studied']} sighting(s), "
+                f"{report.get('outstanding')} still pending, pruned {report['pruned']}"
+            )
+    except Exception as exc:  # noqa: BLE001 - learning must not stop trading
+        log(f"archive study failed: {exc}")
+
+    try:
+        for line in auditor.review(settings, connection):
+            log(line)
+    except Exception as exc:  # noqa: BLE001
+        log(f"auditor failed: {exc}")
 
     state = portfolio_state(settings, connection)
     log(

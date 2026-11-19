@@ -15,10 +15,11 @@ Six sub-agents, each a separate process with one job:
 | --- | --- |
 | **instructor** | Reads the portfolio and sets the plan for the cycle: which sources to run, how many candidates to keep, how many entries to attempt, the one-line directive every agent downstream must respect, and a posture of normal, defensive or paused. |
 | **scout** (one process per source) | Hunts leads. `news` reads crypto RSS feeds, `forums` reads new posts on the meme coin subreddits, `feeds` reads DexScreener's new-profile and boost streams. Pulls out cashtags and raw mint addresses and keeps the link each came from. |
-| **filter** | Resolves leads into real prices, merges duplicates, counts how many independent places mentioned a token, applies every hard screen, and scores what survives. |
+| **filter** | Resolves leads into real prices, merges duplicates, counts how many independent places mentioned a token, applies every hard screen, and scores what survives. Then a RugCheck credibility pass and a whale-concentration pass (Solana public RPC: top ex-pool wallets) run over the shortlist head, and every screen-passing token is written to the archive. |
 | **analyst** | Judgment. Sends one snapshot to the model for a buy/skip verdict with a confidence, a thesis and the risks. Falls back to the rule score when the model is unavailable. |
 | **risk** | Refuses anything outside the limits, and decides the size. |
 | **trader** | The only process that writes: paper fills through the broker. |
+| **auditor** | Runs after every cycle. Grades the bot's own results against the archive (what happened to tokens it priced at/above the entry bar) and against realized trades, and moves `buy_score` when the evidence says the bar is wrong — bounded to +10/-6 from the config base, one 2-point step at a time, at most once per 3 hours. Every change is logged with its evidence, shown on the dashboard. |
 
 Exits are handled by the orchestrator every cycle — stop loss, take profit,
 trailing stop, time expiry — because a decision that must always happen should
@@ -36,6 +37,16 @@ the analyst is there to reject setups the arithmetic likes but that read badly
 — not to invent trades.
 
 Tune it in `config.json` under `scan` and `strategy`.
+
+### How it learns
+
+Three loops, in increasing order of ambition:
+
+1. **Signal weights** — every entry stores the raw per-signal score contributions it had at buy time. When the trade closes, signals that aligned with the outcome gain influence, signals that contradicted it lose some, each clamped to ×0.5–×2.0 of base.
+2. **The archive** — every screen-passing token is remembered as a *sighting* (price, score, age, corroboration). Study passes re-price old sightings and compute what the token did after the bot saw it. Aggregated by score band that becomes the edge table: "tokens we rated 70+ averaged X% since sighting". Resolved sightings older than 21 days are pruned.
+3. **The auditor** — compares the archive's hindsight against the current entry bar. If tokens above the bar have historically gone nowhere, it raises `buy_score`; if they did well and the bar was raised by earlier losses, it eases back. Overrides live in the ledger and flow through `load_config`, so every agent trades on the audited threshold. Hard bounds and a 3-hour cooldown keep a bad inference from running away with the strategy.
+
+Pop culture and money flow enter the same way news does: RSS feeds (extend `scan.news_feeds`) and the whale-flow pass (`scan.rpc_url` points at any Solana RPC if the public one rate-limits).
 
 ## Architecture
 
@@ -146,9 +157,14 @@ file to resume.
 - Fills are simulated against the last DexScreener price with a flat slippage
   assumption. Real fills on a moving meme coin can be much worse, and paper
   results are always optimistic.
-- There is no honeypot, mint-authority, freeze-authority or holder-concentration
-  check. A paper fill in a scam token looks like a good trade; a real one would
-  not.
+- RugCheck covers mint/freeze authority and its risk flags, and the whale-flow
+  pass measures top ex-pool wallet concentration over the public Solana RPC —
+  but only for the shortlist head, and only when the public RPC answers. There
+  is still no full holder-concentration or honeypot-simulation check. A paper
+  fill in a scam token looks like a good trade; a real one would not.
+- The auditor changes its own parameters within hard bounds (+10/-6 on
+  buy_score, one 2-point step, one change per 3 hours). That is self-tuning,
+  not magic: it reads its own paper results, which are always optimistic.
 - Six agents sharing one strategy over public data. This is a research toy, not a
   production trading system, and nothing here is financial advice.
 - `mode` must stay `paper`. There is no live broker, and no code path that
@@ -190,9 +206,11 @@ A Vite + React + TypeScript app in `dashboard/`, built by the workflow into
 - **Grain:** an animated SVG-turbulence film overlay, one data URI.
 - **Motion** (motion.dev): count-up KPIs, card reveals.
 - **Data:** equity curve, open positions with live marks, the watchlist with
-  score, liquidity, volume, age, corroboration, RugCheck credibility and
-  status, recent trades, analyst verdicts, and the self-learning panel — the
-  signal weights the bot has earned from its own closed trades.
+  score, liquidity, volume, age, corroboration, RugCheck credibility, whale
+  flow and status, recent trades, analyst verdicts, the self-learning panel —
+  the signal weights the bot has earned from its own closed trades — and the
+  self-audit panel: the archive's hindsight edge table plus every parameter
+  change the auditor made, with the evidence that justified it.
 
 The page fetches `./data.json`, regenerated by `python3 dashboard.py data` on
 every cycle. If the npm build ever fails, the workflow falls back to a

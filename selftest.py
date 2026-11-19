@@ -14,7 +14,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from coinpilot import broker, strategy, store
+from coinpilot import auditor, broker, memory, strategy, store
 from coinpilot import config as config_mod
 
 FAILURES = 0
@@ -252,6 +252,61 @@ def test_filter(config_path: Path) -> None:
     check("an already-held token is excluded", not (result.get("candidates") or []))
 
 
+def test_memory_and_auditor(config: dict, db_path: Path, config_path: Path) -> None:
+    print("\n-- archive memory + auditor --")
+    connection = store.connect(db_path)
+    try:
+        store.bootstrap(connection, float(config["risk"]["starting_cash_usd"]), "2026-11-19")
+
+        snap = fake_snapshot()
+        survivor = {"snapshot": snap, "rule": {"score": 70.0}, "corroboration": 2}
+        added = memory.record(connection, [survivor])
+        check("a survivor is remembered once", added == 1, str(added))
+        added = memory.record(connection, [survivor])
+        check("an unresolved sighting is deduped", added == 0, str(added))
+
+        # Age the sighting past the study window, then grade it with a fake pricer.
+        connection.execute("UPDATE sightings SET ts = ts - 7200")
+        connection.commit()
+
+        doubled = float(snap["price_usd"]) * 2.0
+        report = memory.study(connection, pricer=lambda addresses: {snap["token_address"]: doubled})
+        check("hindsight grades the old sighting", report["studied"] == 1, str(report))
+
+        band = memory.band_stats(connection, 62.0)
+        check("the entry band picks up the graded sighting", band["above"]["n"] == 1, str(band))
+        check("a 2x after sighting grades as +100%", band["above"]["avg_outcome"] == 100.0, str(band))
+
+        # Losing half the daily budget: the auditor should raise the bar one step.
+        store.set_state(connection, {"realized_pnl_today": -60.0})
+        lines = auditor.review(config, connection)
+        check("a heavy loss day triggers an audit change", any("buy_score" in line for line in lines), str(lines))
+
+        overrides = json.loads(store.get_state(connection)["param_overrides"])
+        check("the audited buy_score is raised by one step", overrides["buy_score"] == 64.0, str(overrides))
+    finally:
+        connection.close()
+
+    # The override must now reach every load_config() caller.
+    effective = config_mod.load_config(str(config_path))
+    check("load_config applies the audited threshold", effective["strategy"]["buy_score"] == 64.0, str(effective["strategy"]["buy_score"]))
+
+
+def test_modules_compile() -> None:
+    print("\n-- every module parses --")
+    root = config_mod.PROJECT_ROOT
+    targets = [
+        *[root / "subagents" / f"{name}.py" for name in ("analyst", "filter", "instructor", "risk", "scout", "trader")],
+        *[root / "coinpilot" / f"{name}.py" for name in ("auditor", "flows", "memory", "store", "strategy", "config", "learn", "credibility", "broker")],
+    ]
+    for path in targets:
+        try:
+            compile(path.read_text(), str(path), "exec")
+            check(f"{path.parent.name}/{path.name} parses", True)
+        except SyntaxError as exc:
+            check(f"{path.parent.name}/{path.name} parses", False, str(exc))
+
+
 def test_dashboard(db_path: Path) -> None:
     print("\n-- dashboard build --")
     from dashboard import build as build_dashboard
@@ -284,6 +339,8 @@ def main() -> int:
     test_risk_agent(config_path)
     test_instructor(config_path)
     test_filter(config_path)
+    test_memory_and_auditor(config, db_path, config_path)
+    test_modules_compile()
     test_dashboard(db_path)
 
     print("")

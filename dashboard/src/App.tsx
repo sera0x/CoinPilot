@@ -107,6 +107,63 @@ function LearningPanel({ learning }: { learning: DashboardData["learning"] }) {
   );
 }
 
+function AuditPanel({ audit }: { audit: DashboardData["audit"] }) {
+  if (!audit) return <p className="muted">No audit data yet.</p>;
+  const { adjustments, edges, band } = audit;
+  return (
+    <div>
+      <p className="muted">
+        After every cycle the auditor grades its own results against the archive: what actually happened to tokens it
+        priced at or above the entry bar, versus below it. When the evidence is strong, it moves buy_score — clamped to
+        ±10 points of the configured base, one 2-point step at a time, at most once per 3 hours.
+      </p>
+      {band && (band.above.n > 0 || band.below.n > 0) && (
+        <p className="muted">
+          <b>Hindsight so far:</b> {band.above.n} token(s) at/above the bar averaged{" "}
+          <span className={cls(band.above.avg_outcome ?? 0)}>{pct(band.above.avg_outcome)}</span> after being seen ·{" "}
+          {band.below.n} below the bar averaged <span className={cls(band.below.avg_outcome ?? 0)}>{pct(band.below.avg_outcome)}</span>.
+        </p>
+      )}
+      {edges.length > 0 && (
+        <table>
+          <thead>
+            <tr><th>Score band at sighting</th><th>Studied</th><th>Avg outcome since</th></tr>
+          </thead>
+          <tbody>
+            {edges.map((e) => (
+              <tr key={e.bucket}>
+                <td>{esc(e.bucket)}</td>
+                <td className="num">{e.n}</td>
+                <td className={`num ${cls(e.avg_outcome ?? 0)}`}>{pct(e.avg_outcome)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {adjustments.length > 0 ? (
+        <table>
+          <thead>
+            <tr><th>When</th><th>Change</th><th>Evidence</th></tr>
+          </thead>
+          <tbody>
+            {adjustments.map((a, i) => (
+              <tr key={i}>
+                <td className="muted">{when(a.ts)}</td>
+                <td>
+                  <b>{esc(a.kind)}</b> {a.value_from == null ? "" : `${a.value_from} → ${a.value_to}`}
+                </td>
+                <td className="muted">{esc(a.reason)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="muted">No parameter changes yet — the archive is still filling. The auditor starts nudging buy_score once ~12 studied sightings sit in the entry band.</p>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -222,7 +279,7 @@ export default function App() {
             <div className="scroll-x">
               <table>
                 <thead>
-                  <tr><th>Score</th><th>Token</th><th>Liquidity</th><th>Vol 24h</th><th>Age</th><th>24h</th><th>Seen</th><th>Status</th><th>Credibility</th></tr>
+                  <tr><th>Score</th><th>Token</th><th>Liquidity</th><th>Vol 24h</th><th>Age</th><th>24h</th><th>Seen</th><th>Status</th><th>Credibility</th><th>Whale flow</th></tr>
                 </thead>
                 <tbody>
                   {data.watchlist.map((w, i) => (
@@ -236,6 +293,7 @@ export default function App() {
                       <td className="num">{w.corroboration}x</td>
                       <td><span className={`pill ${esc(w.status)}`}>{esc(w.status)}</span></td>
                       <td className="muted cred">{esc(w.credibility)}</td>
+                      <td className="muted cred">{esc(w.flows)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -296,6 +354,10 @@ export default function App() {
 
         <Card title="Self-learning — what the bot has figured out" delay={0.2}>
           {data ? <LearningPanel learning={data.learning} /> : <p className="muted">—</p>}
+        </Card>
+
+        <Card title="Self-audit — the flaws it found and what it changed" delay={0.25}>
+          {data ? <AuditPanel audit={data.audit} /> : <p className="muted">—</p>}
         </Card>
 
         <p className="foot">

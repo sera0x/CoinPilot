@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from coinpilot import config as config_mod
-from coinpilot import learn, market, store
+from coinpilot import auditor, learn, market, memory, store
 
 CSS = """
 :root {
@@ -752,6 +752,7 @@ def collect(db_path: Path) -> dict:
                 "status": item.get("status") or "seen",
                 "reason": (item.get("reason") or "")[:200],
                 "credibility": item.get("credibility") or "",
+                "flows": item.get("flows") or "",
             }
             for item in watchlist
         ]
@@ -812,6 +813,11 @@ def collect(db_path: Path) -> dict:
             "trades": trade_view,
             "verdicts": verdicts,
             "learning": learning,
+            "audit": {
+                "adjustments": store.recent_adjustments(connection, 12),
+                "edges": memory.edges(connection),
+                "band": memory.band_stats(connection, float(settings["strategy"]["buy_score"])),
+            },
             "last_scan": store.last_candidate_time(connection),
         }
     finally:

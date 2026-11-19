@@ -48,6 +48,7 @@ DEFAULTS: dict = {
             "TRX",
         ],
         "metas": [],
+        "rpc_url": "https://api.mainnet-beta.solana.com",
         "user_agent": "",
         "max_leads": 120,
         "max_ticker_lookups": 25,
@@ -122,7 +123,32 @@ def load_config(path: str | None = None) -> dict:
     if config_path is not None and config_path.exists():
         with open(config_path, encoding="utf-8") as handle:
             config = _deep_merge(config, json.load(handle))
+    _apply_audited_overrides(config)
     return config
+
+
+def _apply_audited_overrides(config: dict) -> None:
+    """The auditor may have drifted buy_score within bounded limits; the ledger
+    is the source of truth for the effective value. A missing or unreadable
+    ledger simply means the config values stand."""
+
+    try:
+        from . import store
+
+        connection = store.connect(db_path(config))
+        try:
+            row = connection.execute("SELECT value FROM state WHERE key = 'param_overrides'").fetchone()
+        finally:
+            connection.close()
+        if row:
+            data = json.loads(row["value"])
+            if isinstance(data, dict):
+                try:
+                    config["strategy"]["buy_score"] = max(40.0, min(90.0, float(data.get("buy_score"))))
+                except (TypeError, ValueError):
+                    pass
+    except Exception:  # noqa: BLE001 - overrides must never break config loading
+        pass
 
 
 def resolve_path(value: str) -> Path:

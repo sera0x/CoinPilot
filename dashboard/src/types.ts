@@ -37,6 +37,7 @@ export interface WatchItem {
   status: string;
   reason: string;
   credibility: string;
+  flows: string;
 }
 
 export interface Trade {
@@ -82,6 +83,29 @@ export interface WinStats {
   avg_loss: number;
 }
 
+export interface Adjustment {
+  ts: number;
+  kind: string;
+  value_from: number | null;
+  value_to: number | null;
+  reason: string;
+}
+
+export interface EdgeBucket {
+  bucket: string;
+  n: number;
+  avg_outcome: number | null;
+}
+
+export interface Audit {
+  adjustments: Adjustment[];
+  edges: EdgeBucket[];
+  band: {
+    above: { n: number; avg_outcome: number | null };
+    below: { n: number; avg_outcome: number | null };
+  };
+}
+
 export interface DashboardData {
   generated: string;
   chain: string;
@@ -93,5 +117,6 @@ export interface DashboardData {
   trades: Trade[];
   verdicts: Verdict[];
   learning: Learning;
+  audit: Audit;
   last_scan: number | null;
 }
