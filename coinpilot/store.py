@@ -57,6 +57,24 @@ CREATE TABLE IF NOT EXISTS decisions (
     stage TEXT NOT NULL,
     payload TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    token_address TEXT NOT NULL,
+    symbol TEXT,
+    score REAL,
+    liquidity_usd REAL,
+    volume_h24 REAL,
+    age_minutes REAL,
+    change_h24 REAL,
+    corroboration INTEGER DEFAULT 0,
+    sources TEXT,
+    status TEXT DEFAULT 'seen',
+    reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidates_ts ON candidates (ts);
 """
 
 
@@ -229,4 +247,106 @@ def totals(connection: sqlite3.Connection) -> dict:
         "day": state.get("day"),
         "trades_today": int(float(state.get("trades_today") or 0)),
         "realized_pnl_today": float(state.get("realized_pnl_today") or 0),
+    }
+
+
+
+def record_candidates(connection: sqlite3.Connection, candidates: list[dict], ts: float | None = None) -> int:
+    """Persist this cycle's scored shortlist so the dashboard can show it."""
+
+    when = time.time() if ts is None else ts
+    rows = []
+    for item in candidates or []:
+        snap = item.get("snapshot") or {}
+        rule = item.get("rule") or {}
+        address = snap.get("token_address")
+        if not address:
+            continue
+        rows.append(
+            (
+                when,
+                address,
+                snap.get("symbol"),
+                float(rule.get("score") or 0.0),
+                snap.get("liquidity_usd"),
+                snap.get("volume_h24"),
+                snap.get("age_minutes"),
+                snap.get("change_h24"),
+                int(item.get("corroboration") or 0),
+                ",".join(item.get("sources") or []),
+                "seen",
+                "",
+            )
+        )
+    if rows:
+        connection.executemany(
+            "INSERT INTO candidates "
+            "(ts, token_address, symbol, score, liquidity_usd, volume_h24, age_minutes, change_h24, "
+            "corroboration, sources, status, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        connection.commit()
+    return len(rows)
+
+
+def update_candidate(connection: sqlite3.Connection, token_address: str, status: str, reason: str = "") -> None:
+    """Mark the most recent row for a token as judged, blocked, entered or skipped."""
+
+    connection.execute(
+        "UPDATE candidates SET status = ?, reason = ? WHERE id = "
+        "(SELECT id FROM candidates WHERE token_address = ? ORDER BY ts DESC, id DESC LIMIT 1)",
+        (status, (reason or "")[:300], token_address),
+    )
+    connection.commit()
+
+
+def latest_candidates(connection: sqlite3.Connection, limit: int = 40) -> list[dict]:
+    """The most recent scan batch, highest score first."""
+
+    row = connection.execute("SELECT MAX(ts) AS ts FROM candidates").fetchone()
+    if row is None or row["ts"] is None:
+        return []
+    rows = connection.execute(
+        "SELECT * FROM candidates WHERE ts = ? ORDER BY score DESC LIMIT ?", (row["ts"], limit)
+    ).fetchall()
+    return [dict(item) for item in rows]
+
+
+def last_candidate_time(connection: sqlite3.Connection) -> float | None:
+    row = connection.execute("SELECT MAX(ts) AS ts FROM candidates").fetchone()
+    return float(row["ts"]) if row and row["ts"] is not None else None
+
+
+def realized_series(connection: sqlite3.Connection) -> list[float]:
+    """Cumulative realized PnL after each closed trade, starting from zero."""
+
+    rows = connection.execute(
+        "SELECT pnl_usd FROM trades WHERE pnl_usd IS NOT NULL ORDER BY ts"
+    ).fetchall()
+    series = [0.0]
+    total = 0.0
+    for row in rows:
+        total += float(row["pnl_usd"] or 0.0)
+        series.append(total)
+    return series
+
+
+def win_stats(connection: sqlite3.Connection) -> dict:
+    row = connection.execute(
+        "SELECT COUNT(*) AS closed, "
+        "SUM(CASE WHEN pnl_usd > 0 THEN 1 ELSE 0 END) AS wins, "
+        "SUM(CASE WHEN pnl_usd < 0 THEN 1 ELSE 0 END) AS losses, "
+        "AVG(CASE WHEN pnl_usd > 0 THEN pnl_usd END) AS avg_win, "
+        "AVG(CASE WHEN pnl_usd < 0 THEN pnl_usd END) AS avg_loss "
+        "FROM trades WHERE pnl_usd IS NOT NULL"
+    ).fetchone()
+    closed = int(row["closed"] or 0)
+    wins = int(row["wins"] or 0)
+    return {
+        "closed": closed,
+        "wins": wins,
+        "losses": int(row["losses"] or 0),
+        "win_rate": (wins / closed * 100.0) if closed else 0.0,
+        "avg_win": float(row["avg_win"] or 0.0),
+        "avg_loss": float(row["avg_loss"] or 0.0),
     }

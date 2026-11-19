@@ -252,6 +252,22 @@ def test_filter(config_path: Path) -> None:
     check("an already-held token is excluded", not (result.get("candidates") or []))
 
 
+def test_dashboard(db_path: Path) -> None:
+    print("\n-- dashboard build --")
+    from dashboard import build as build_dashboard
+
+    out = Path(tempfile.mkdtemp(prefix="coinpilot-dash-"))
+    build_dashboard(db_path, out)
+    page = (out / "index.html").read_text(encoding="utf-8")
+
+    check("dashboard renders a full page", page.startswith("<!DOCTYPE html>") and page.rstrip().endswith("</html>"))
+    check("dashboard is titled", "CoinPilot" in page)
+    check("dashboard shows the watchlist section", "Watchlist" in page)
+    check("dashboard shows trades from the ledger", "Recent trades" in page)
+    check("dashboard shows the equity curve block", "Equity curve" in page)
+    check("dashboard embeds no key material", "sk-" not in page and "api_key" not in page.lower())
+
+
 def main() -> int:
     workdir = Path(tempfile.mkdtemp(prefix="coinpilot-selftest-"))
     db_path = workdir / "paper.db"
@@ -268,6 +284,7 @@ def main() -> int:
     test_risk_agent(config_path)
     test_instructor(config_path)
     test_filter(config_path)
+    test_dashboard(db_path)
 
     print("")
     if FAILURES:

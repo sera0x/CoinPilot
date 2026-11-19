@@ -169,13 +169,36 @@ on GitHub's servers (nothing to host, no VPS), keeps the SQLite ledger on a
 
 Seeing the dashboard:
 
-- **Private repo (default):** download the `dashboard` artifact from any run
-  in the Actions tab (the run's page, under Artifacts), unzip it and open
-  `index.html` in a browser. Only you can see it.
-- **Public repo, or GitHub Pro:** Settings → Pages → Source "GitHub Actions",
-  then set the `ENABLE_PAGES` repo variable (Settings → Secrets and variables
-  → Actions → Variables → New) to `on`, and the workflow also publishes it to
-  a live Pages URL automatically.
+- **Public repo:** Settings → Pages → Source "GitHub Actions", then Settings →
+  Secrets and variables → Actions → Variables → New, name `ENABLE_PAGES`,
+  value `on`. The workflow then publishes to `https://<user>.github.io/CoinPilot/`
+  on every cycle. The repo is public, so the bot's paper ledger is public too.
+- **Private repo (or no Pages):** download the `dashboard` artifact from any
+  run in the Actions tab (the run's page, under Artifacts), unzip it and open
+  `index.html` in a browser.
+
+### The dashboard
+
+One self-contained `dist/index.html`, built by `dashboard.py` from the ledger.
+Content is rendered server-side, so it reads fine with JavaScript blocked; the
+visual layer is progressive:
+
+- **Orb:** a WebGL shader sphere (three.js, loaded from a CDN) whose colour
+  tracks equity against the starting balance. No WebGL means a CSS orb is
+  shown instead.
+- **Grain:** an animated SVG turbulence overlay, ffmpeg-free and one data URI.
+- **Motion:** count-up numbers, staggered table rows and card reveals via
+  Motion (motion.dev) if the CDN answers, with a CSS/IntersectionObserver
+  reveal as the fallback.
+- **Data:** equity curve from closed trades, open positions with live marks,
+  the latest scan's watchlist with score, liquidity, volume, age, how many
+  sources mentioned each token and what happened to it (entered, blocked,
+  skipped), recent trades, and the analyst's latest verdicts.
+
+React Bits is a React component collection and this page has no build step or
+React runtime, so its effects are reproduced in plain CSS and Motion rather
+than imported. If you want the literal library, the dashboard needs a Vite +
+React build in the workflow; ask and I'll add it.
 
 Other setup in the repo on GitHub:
 

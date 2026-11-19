@@ -307,6 +307,7 @@ def find_entries(settings: dict, connection) -> list[dict]:
     outcome = discovery(settings, state, exclude)
     plan = outcome["plan"]
     candidates = outcome["candidates"]
+    store.record_candidates(connection, candidates)
 
     attempts = int(plan.get("max_candidates_per_cycle") or 0)
     if attempts <= 0:
@@ -334,6 +335,9 @@ def find_entries(settings: dict, connection) -> list[dict]:
         score = float(decision.get("score") or 0.0)
         thesis = (decision.get("thesis") or "").strip()
         log(f"{symbol}: {decision.get('action')} score {score:.0f} via {decision.get('source')} - {thesis[:120]}")
+        store.update_candidate(
+            connection, token_address, "skip" if decision.get("action") != "buy" else "judged", thesis
+        )
 
         state = portfolio_state(settings, connection)
         try:
@@ -345,6 +349,7 @@ def find_entries(settings: dict, connection) -> list[dict]:
         store.record_decision(connection, "risk", verdict, token_address, symbol)
         if not verdict.get("approved"):
             log(f"{symbol}: blocked - {verdict.get('reason')}")
+            store.update_candidate(connection, token_address, "blocked", str(verdict.get("reason") or ""))
             continue
 
         try:
@@ -367,6 +372,7 @@ def find_entries(settings: dict, connection) -> list[dict]:
             continue
 
         log(f"OPENED {result.get('symbol')} {money(verdict.get('size_usd'))} @ {price_text(result.get('fill_price'))}")
+        store.update_candidate(connection, token_address, "entered", thesis)
         opened.append(result)
         slots -= 1
 
@@ -471,10 +477,11 @@ def command_scan(settings: dict) -> int:
     connection = store.connect(config.db_path(settings))
     try:
         state = portfolio_state(settings, connection)
+        outcome = discovery(settings, state, [], verbose=True)
+        stored = store.record_candidates(connection, outcome["candidates"])
     finally:
         connection.close()
 
-    outcome = discovery(settings, state, [], verbose=True)
     plan = outcome["plan"]
     candidates = outcome["candidates"]
     filtered = outcome["filtered"] or {}

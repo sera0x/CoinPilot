@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 config.json
 data/
+dist/
 *.db
 *.db-wal
 *.db-shm
