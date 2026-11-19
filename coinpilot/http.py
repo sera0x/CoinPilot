@@ -57,7 +57,9 @@ def request_json(
             if exc.code not in RETRY_STATUS:
                 detail = ""
                 try:
-                    detail = exc.read().decode("utf-8", "replace")[:300]
+                    # Reddit and friends return whole HTML pages on a block;
+                    # one collapsed line is plenty for a log.
+                    detail = " ".join(exc.read().decode("utf-8", "replace").split())[:140]
                 except Exception:  # noqa: BLE001 - best effort only
                     pass
                 raise HttpError(f"HTTP {exc.code} from {full_url}: {detail}") from exc
