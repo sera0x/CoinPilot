@@ -51,7 +51,12 @@ class LLM:
 
     @property
     def available(self) -> bool:
-        return self.enabled and bool(self.base_url) and bool(self.model)
+        if not (self.enabled and self.base_url and self.model):
+            return False
+        # A hosted endpoint without a key only returns 401 on every candidate,
+        # so skip it and let the rule engine decide. Local servers need no key.
+        local = any(host in self.base_url for host in ("localhost", "127.0.0.1", "[::1]"))
+        return bool(self.key) or local
 
     def chat_json(self, system: str, user: str) -> dict:
         if not self.available:
