@@ -163,16 +163,25 @@ database is a single SQLite file you can copy anywhere.
 
 ### GitHub Actions (no other account needed)
 
-`.github/workflows/coinpilot.yml` runs `python3 main.py once` every 5 minutes,
-keeps the SQLite ledger on a `ledger` branch (it survives runs), and deploys a
-static dashboard (equity, positions, trades, verdicts) to GitHub Pages.
+`.github/workflows/coinpilot.yml` runs `python3 main.py once` every 5 minutes
+on GitHub's servers (nothing to host, no VPS), keeps the SQLite ledger on a
+`ledger` branch (it survives runs), and builds a static dashboard every run.
 
-One-time setup in the repo on GitHub:
+Seeing the dashboard:
 
-1. Settings → Pages → Build and deployment → Source: **GitHub Actions**
-2. Optional: Settings → Secrets and variables → Actions → add
+- **Private repo (default):** download the `dashboard` artifact from any run
+  in the Actions tab (the run's page, under Artifacts), unzip it and open
+  `index.html` in a browser. Only you can see it.
+- **Public repo, or GitHub Pro:** Settings → Pages → Source "GitHub Actions",
+  then set the `ENABLE_PAGES` repo variable (Settings → Secrets and variables
+  → Actions → Variables → New) to `on`, and the workflow also publishes it to
+  a live Pages URL automatically.
+
+Other setup in the repo on GitHub:
+
+1. Optional: Settings → Secrets and variables → Actions → add
    `OPENAI_API_KEY` to turn on the LLM analyst and instructor
-3. Kill switch: commit an empty file named `KILL` to the default branch
+2. Kill switch: commit an empty file named `KILL` to the default branch
    (Add file → Create new file → `KILL`). The next cycle exits only.
 
 Know before you lean on it: GitHub's scheduler can run minutes late, and

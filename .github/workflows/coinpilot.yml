@@ -95,7 +95,11 @@ jobs:
           path: dist
 
   pages:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # The dashboard HTML is always uploaded as the "dashboard" artifact of the
+    # cycle job, which works on private repos with no extra setup. Publishing
+    # to a real Pages site additionally needs a public repo or GitHub Pro:
+    # flip that on and set the ENABLE_PAGES repo variable to "on" to use it.
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.ENABLE_PAGES == 'on'
     needs: cycle
     runs-on: ubuntu-latest
     permissions:
