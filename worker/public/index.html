@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoinPilot — paper trading desk</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #21262d;
+    --text: #c9d1d9; --muted: #8b949e; --green: #3fb950; --red: #f85149; --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 18px; margin: 0; }
+  header h1 small { color: var(--muted); font-weight: 400; }
+  .stat { display: flex; flex-direction: column; }
+  .stat b { font-size: 15px; }
+  .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .up { color: var(--green); } .down { color: var(--red); }
+  .badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; border: 1px solid var(--border); }
+  .kill-on { color: var(--red); border-color: var(--red); }
+  .kill-off { color: var(--green); border-color: var(--green); }
+  main { padding: 16px 20px 40px; display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { main { grid-template-columns: 1fr 1fr; } .wide { grid-column: 1 / -1; } }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow: auto; }
+  section h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td a { color: var(--accent); text-decoration: none; }
+  .muted { color: var(--muted); }
+  button { background: #21262d; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+  .bar .pos { background: var(--green); } .bar .neg { background: var(--red); }
+  .controls { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CoinPilot <small>paper trading · <span id="chain">solana</span> · cron every 5 min</small></h1>
+  <div class="stat"><b id="equity">—</b><span>Equity</span></div>
+  <div class="stat"><b id="cash">—</b><span>Cash</span></div>
+  <div class="stat"><b id="pnl-today">—</b><span>Realized today</span></div>
+  <div class="stat"><b id="pnl-total">—</b><span>Realized all-time</span></div>
+  <div class="stat"><b id="unreal">—</b><span>Unrealized</span></div>
+  <div class="stat"><b id="trades-today">—</b><span>Trades today</span></div>
+  <div class="badge kill-off" id="killbadge">live</div>
+  <div class="controls">
+    <input id="token" type="password" placeholder="dashboard token (optional)" title="only needed if you set the DASHBOARD_TOKEN secret">
+    <button id="runcycle">Run cycle</button>
+    <button id="togglekill">Kill / Resume</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Open positions</h2>
+    <table><thead><tr><th>Token</th><th>Entry $</th><th>Mark</th><th>Value</th><th>PnL</th><th>Held</th><th>Thesis</th></tr></thead>
+    <tbody id="positions"><tr><td class="muted">loading…</td></tr></tbody></table>
+  </section>
+
+  <section>
+    <h2>Tokens found (latest scan)</h2>
+    <table><thead><tr><th>Score</th><th>Symbol</th><th>Liquidity</th><th>Vol 24h</th><th>Age</th><th>Seen</th><th>Status</th></tr></thead>
+    <tbody id="candidates"><tr><td class="muted">no scan yet — the first cron cycle fills this</td></tr></tbody></table>
+  </section>
+
+  <section class="wide">
+    <h2>Recent trades</h2>
+    <table><thead><tr><th>When</th><th>Side</th><th>Token</th><th>USD</th><th>Price</th><th>PnL</th><th>Reason</th></tr></thead>
+    <tbody id="trades"><tr><td class="muted">no trades yet</td></tr></tbody></table>
+  </section>
+
+  <section>
+    <h2>Equity curve (closed trades)</h2>
+    <div id="curve" class="muted">appears once the first round trip closes</div>
+  </section>
+
+  <section>
+    <h2>Self-learning — signal weights (1.00 = untouched)</h2>
+    <div id="learning" class="muted">updates after the first closed trade</div>
+  </section>
+
+  <section class="wide">
+    <h2>Recent cycles</h2>
+    <table><thead><tr><th>When</th><th>Posture</th><th>Leads</th><th>Resolved</th><th>Candidates</th><th>Opened</th><th>Closed</th><th>Equity</th></tr></thead>
+    <tbody id="cycles"><tr><td class="muted">no cycles yet</td></tr></tbody></table>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtUsd = (v) => (v == null ? "—" : "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const fmtPct = (v) => (v == null ? "—" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%");
+const cls = (v) => (v >= 0 ? "up" : "down");
+const when = (ts) => new Date(ts * 1000).toLocaleString();
+const qs = () => { const t = $("token").value.trim(); return t ? "?token=" + encodeURIComponent(t) : ""; };
+let killState = false;
+
+async function refresh() {
+  let data;
+  try {
+    const r = await fetch("/api/summary" + qs(), { cache: "no-store" });
+    data = await r.json();
+    if (data.error) throw new Error(data.error);
+  } catch (e) {
+    $("equity").textContent = "api error";
+    return;
+  }
+  const a = data.account;
+  $("chain").textContent = data.chain;
+  $("equity").textContent = fmtUsd(a.equity_usd);
+  $("cash").textContent = fmtUsd(a.cash_usd);
+  $("pnl-today").textContent = fmtUsd(a.realized_pnl_today);
+  $("pnl-today").className = cls(a.realized_pnl_today);
+  $("pnl-total").textContent = fmtUsd(a.realized_pnl_total);
+  $("pnl-total").className = cls(a.realized_pnl_total);
+  $("unreal").textContent = fmtUsd(a.unrealized_pnl_usd);
+  $("unreal").className = cls(a.unrealized_pnl_usd);
+  $("trades-today").textContent = a.trades_today;
+  killState = !!a.kill;
+  const badge = $("killbadge");
+  badge.textContent = a.kill ? "KILLED — exits only" : "live";
+  badge.className = "badge " + (a.kill ? "kill-on" : "kill-off");
+
+  $("positions").innerHTML = data.positions.length
+    ? data.positions.map((p) => `<tr>
+        <td><a href="https://dexscreener.com/solana/${p.token_address}" target="_blank">${esc(p.symbol)}</a></td>
+        <td>${fmtUsd(p.entry_usd)}</td><td>${p.mark_price ?? "—"}</td>
+        <td>${fmtUsd(p.value_usd)}</td>
+        <td class="${cls(p.pnl_usd)}">${fmtUsd(p.pnl_usd)} (${fmtPct(p.pnl_pct)})</td>
+        <td>${Math.round(p.held_minutes)}m</td><td class="muted">${esc(p.thesis || "")}</td></tr>`).join("")
+    : `<tr><td class="muted">none</td></tr>`;
+
+  $("candidates").innerHTML = data.candidates.length
+    ? data.candidates.map((c) => {
+        const s = typeof c.snapshot === "string" ? JSON.parse(c.snapshot) : c.snapshot;
+        const age = s.age_minutes ? (s.age_minutes < 120 ? Math.round(s.age_minutes) + "m" : (s.age_minutes / 60).toFixed(1) + "h") : "—";
+        return `<tr>
+          <td><b>${c.score}</b></td><td>${esc(c.symbol)}</td>
+          <td>${fmtUsd(s.liquidity_usd)}</td><td>${fmtUsd(s.volume_h24)}</td><td>${age}</td>
+          <td>${c.corroboration}x (${esc(c.sources)})</td>
+          <td><span class="muted">${esc(c.status)}</span></td></tr>`;
+      }).join("")
+    : `<tr><td class="muted">no scan yet — the first cron cycle fills this</td></tr>`;
+
+  $("trades").innerHTML = data.trades.length
+    ? data.trades.map((t) => `<tr>
+        <td class="muted">${when(t.ts)}</td>
+        <td class="${t.side === "buy" ? "up" : "down"}">${t.side.toUpperCase()}</td>
+        <td>${esc(t.symbol)}</td><td>${fmtUsd(t.usd)}</td><td>${t.price}</td>
+        <td class="${t.pnl_usd == null ? "muted" : cls(t.pnl_usd)}">${t.pnl_usd == null ? "—" : fmtUsd(t.pnl_usd)}</td>
+        <td class="muted">${esc(t.reason || "")}</td></tr>`).join("")
+    : `<tr><td class="muted">no trades yet</td></tr>`;
+
+  const closed = data.trades.filter((t) => t.side === "sell" && t.pnl_usd != null).reverse();
+  if (closed.length) {
+    let equity = a.starting_cash_usd, min = equity, max = equity;
+    const pts = [equity];
+    for (const t of closed) { equity += t.pnl_usd; pts.push(equity); min = Math.min(min, equity); max = Math.max(max, equity); }
+    const w = 560, h = 90, span = max - min || 1;
+    const path = pts.map((v, i) => `${(i / (pts.length - 1)) * w},${h - ((v - min) / span) * h}`).join(" ");
+    $("curve").innerHTML = `<svg width="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polyline points="${path}" fill="none" stroke="${equity >= a.starting_cash_usd ? "#3fb950" : "#f85149"}" stroke-width="2"/></svg>
+      <span class="muted">${closed.length} closed round trips · start ${fmtUsd(a.starting_cash_usd)} → ${fmtUsd(equity)}</span>`;
+  }
+
+  const L = data.learning || { mult: {}, stats: {} };
+  $("learning").innerHTML = Object.keys(L.mult || {}).map((g) => {
+    const mult = L.mult[g], st = L.stats[g] || { pos_n: 0, pos_sum: 0, neg_n: 0, neg_sum: 0 };
+    const pct = Math.min(100, Math.abs((mult - 1) * 100));
+    const avgPos = st.pos_n ? (st.pos_sum / st.pos_n).toFixed(1) : null;
+    const avgNeg = st.neg_n ? (st.neg_sum / st.neg_n).toFixed(1) : null;
+    return `<div style="margin-bottom:8px">${g} <b>x${Number(mult).toFixed(2)}</b>
+      <div class="bar"><i class="${mult >= 1 ? "pos" : "neg"}" style="width:${pct}%"></i></div>
+      <span class="muted">won ${st.pos_n} (avg ${avgPos ?? "—"}%) · lost ${st.neg_n} (avg ${avgNeg ?? "—"}%)</span></div>`;
+  }).join("") || "no learning data yet";
+
+  $("cycles").innerHTML = data.cycles.length
+    ? data.cycles.map((c) => {
+        const p = typeof c.plan === "string" ? JSON.parse(c.plan) : c.plan;
+        return `<tr><td class="muted">${when(c.ts)}</td><td>${esc(p?.risk_posture || "?")} (${esc(p?.source_of_truth || "?")})</td>
+        <td>${c.leads_in}</td><td>${c.priced}</td><td>${c.candidates}</td><td>${c.opened}</td><td>${c.closed}</td>
+        <td>${fmtUsd(c.equity_usd)}</td></tr>`;
+      }).join("")
+    : `<tr><td class="muted">no cycles yet</td></tr>`;
+}
+
+function esc(text) {
+  const div = document.createElement("div");
+  div.textContent = String(text ?? "");
+  return div.innerHTML;
+}
+
+$("runcycle").onclick = async () => {
+  $("runcycle").disabled = true;
+  try { await fetch("/api/cycle" + qs(), { method: "POST" }); } finally { $("runcycle").disabled = false; refresh(); }
+};
+$("togglekill").onclick = async () => {
+  await fetch("/api/kill" + qs(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kill: !killState }) });
+  refresh();
+};
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

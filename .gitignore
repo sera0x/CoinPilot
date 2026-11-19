@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+config.json
+data/
+*.db
+*.db-wal
+*.db-shm
+KILL
+.env
+worker/node_modules/
+worker/.wrangler/

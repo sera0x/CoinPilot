@@ -1,0 +1,117 @@
+name: CoinPilot paper cycle
+
+# Runs the Python paper bot on a schedule, keeps its SQLite ledger on a
+# "ledger" branch, and publishes the static dashboard to GitHub Pages.
+#
+# One-time manual steps in the repo:
+#   1. Settings -> Pages -> Source: "GitHub Actions"
+#   2. Optional: Settings -> Secrets -> add OPENAI_API_KEY for the LLM analyst
+#   3. Kill switch: commit an empty file named KILL to the default branch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # GitHub schedules can be a few minutes late; that is fine here
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths-ignore:
+      - "worker/**"
+      - "**.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coinpilot-cycle
+  cancel-in-progress: false
+
+jobs:
+  selftest:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 selftest.py
+
+  cycle:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore ledger (previous SQLite database)
+        run: |
+          git fetch origin ledger --depth=1 || true
+          if git show-ref --verify -q refs/remotes/origin/ledger; then
+            git checkout origin/ledger -- data/coinpilot.db
+            echo "ledger restored from origin/ledger"
+          else
+            echo "no ledger branch yet; starting a fresh paper account"
+          fi
+
+      - name: Run one cycle
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python3 main.py once
+
+      - name: Build dashboard
+        run: python3 dashboard.py build --db data/coinpilot.db --out dist
+
+      - name: Save ledger back to the ledger branch
+        run: |
+          git config user.name "coinpilot-bot"
+          git config user.email "bot@users.noreply.github.com"
+          cp data/coinpilot.db /tmp/coinpilot.db
+          git fetch origin ledger --depth=1 || true
+          if git show-ref --verify -q refs/remotes/origin/ledger; then
+            git branch -f ledger origin/ledger
+            git switch -f ledger
+          else
+            git switch --orphan ledger
+          fi
+          mkdir -p data
+          cp /tmp/coinpilot.db data/coinpilot.db
+          # -f: the checked-out .gitignore ignores data/ even on this branch
+          git add -f data/coinpilot.db
+          if git status --porcelain -- data/coinpilot.db | grep -q .; then
+            git commit -m "ledger: cycle $(date -u +%FT%TZ)"
+            git push origin ledger
+          else
+            echo "ledger unchanged; nothing to commit"
+          fi
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: dist
+
+  pages:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: cycle
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashboard
+          path: dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

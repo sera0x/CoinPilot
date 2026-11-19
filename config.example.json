@@ -1,0 +1,67 @@
+{
+  "chain": "solana",
+  "mode": "paper",
+  "storage": {
+    "db_path": "data/coinpilot.db"
+  },
+  "llm": {
+    "enabled": true,
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "timeout_seconds": 60,
+    "temperature": 0.2,
+    "max_candidates_per_cycle": 3
+  },
+  "scan": {
+    "sources": ["news", "forums", "feeds"],
+    "forum_subreddits": ["CryptoMoonShots", "memecoins", "SolanaMemeCoins", "Solana"],
+    "news_feeds": [
+      "https://www.coindesk.com/arc/outboundfeeds/rss/",
+      "https://cointelegraph.com/rss",
+      "https://decrypt.co/feed"
+    ],
+    "ignore_tickers": [
+      "BTC", "ETH", "SOL", "USDC", "USDT", "BNB", "XRP", "ADA", "AVAX", "LINK", "DOT", "MATIC", "TRX"
+    ],
+    "metas": [],
+    "user_agent": "",
+    "max_leads": 120,
+    "max_ticker_lookups": 25,
+    "min_liquidity_usd": 25000,
+    "min_volume_24h_usd": 50000,
+    "min_age_minutes": 10,
+    "max_age_hours": 720,
+    "min_trades_24h": 20,
+    "max_addresses": 60,
+    "max_candidates": 8
+  },
+  "strategy": {
+    "buy_score": 62,
+    "position_usd": 50,
+    "min_position_usd": 5,
+    "max_positions": 3,
+    "take_profit_pct": 60,
+    "stop_loss_pct": -25,
+    "trailing_stop_pct": 20,
+    "max_hold_minutes": 240
+  },
+  "risk": {
+    "starting_cash_usd": 1000,
+    "max_position_pct_of_equity": 10,
+    "max_exposure_pct": 60,
+    "max_position_pct_of_liquidity": 0.02,
+    "max_daily_loss_usd": 100,
+    "max_trades_per_day": 20,
+    "cooldown_minutes": 120,
+    "kill_switch_file": "KILL"
+  },
+  "paper": {
+    "fee_pct": 0.5,
+    "slippage_pct": 1.5
+  },
+  "loop": {
+    "interval_seconds": 300,
+    "max_cycles": 0
+  }
+}

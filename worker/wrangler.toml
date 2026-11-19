@@ -1,0 +1,27 @@
+name = "coinpilot"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# One full cycle every 5 minutes: exits first, then entries.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# The dashboard. Files in ./public are served directly; /api/* falls through to the Worker.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Create it with:  npx wrangler d1 create coinpilot
+# then paste the id it prints here.
+[[d1_databases]]
+binding = "DB"
+database_name = "coinpilot"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+CHAIN = "solana"
+# Optional: paste a JSON override of config here, e.g. '{"strategy":{"position_usd":25}}'.
+# Secrets (npx wrangler secret put ...): LLM_API_KEY, DASHBOARD_TOKEN.
+LLM_BASE_URL = "https://api.openai.com/v1"
+LLM_MODEL = "gpt-4o-mini"
+CONFIG_JSON = ""
