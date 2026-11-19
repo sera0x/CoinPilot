@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>CoinPilot - paper desk</title>
+<style>
+
+:root {
+  --bg: #06080b;
+  --panel: rgba(17, 21, 27, 0.74);
+  --line: rgba(255, 255, 255, 0.075);
+  --ink: #e6edf3;
+  --muted: #8b949e;
+  --up: #3fb950;
+  --down: #f85149;
+  --accent: #58a6ff;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(1100px 620px at 18% -12%, rgba(88, 166, 255, 0.12), transparent 62%),
+    radial-gradient(900px 520px at 92% -4%, rgba(63, 185, 80, 0.09), transparent 58%),
+    var(--bg);
+}
+.grain {
+  position: fixed; inset: -40px; z-index: 0; pointer-events: none;
+  opacity: 0.5; mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  animation: grain 5s steps(5) infinite;
+}
+@keyframes grain {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-1.6%, 1.2%); }
+  40% { transform: translate(1.4%, -1.5%); }
+  60% { transform: translate(-1.1%, -0.9%); }
+  80% { transform: translate(1.7%, 0.8%); }
+  100% { transform: translate(0, 0); }
+}
+.wrap { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 26px 20px 64px; }
+.hero {
+  display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 28px; align-items: center;
+  padding: 22px 26px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  backdrop-filter: blur(14px);
+}
+.orb-wrap { position: relative; width: 224px; height: 224px; justify-self: center; }
+#orb { display: block; width: 100%; height: 100%; border-radius: 50%; filter: drop-shadow(0 22px 48px rgba(0, 0, 0, 0.55)); }
+.orb-fallback {
+  display: none; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, var(--orb-hi, #7ee7a0), var(--orb-lo, #14532d) 58%, rgba(4, 8, 12, 0.9) 100%);
+  box-shadow: inset 0 0 60px rgba(255, 255, 255, 0.16), 0 22px 48px rgba(0, 0, 0, 0.55);
+  animation: breathe 7s ease-in-out infinite;
+}
+html.no-webgl #orb { display: none; }
+html.no-webgl .orb-fallback { display: block; }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.035); filter: brightness(1.16); }
+}
+.eyebrow { margin: 0; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 4px 0 6px; font-size: 30px; letter-spacing: -0.02em; font-weight: 600; }
+.lede { margin: 0 0 14px; color: var(--muted); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+.kpi {
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 13px;
+  background: rgba(255, 255, 255, 0.028);
+}
+.kpi span { display: block; font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.kpi b { display: block; margin-top: 3px; font-family: var(--mono); font-size: 17px; font-variant-numeric: tabular-nums; }
+.card {
+  padding: 15px 17px; margin-bottom: 16px; overflow: auto;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+  backdrop-filter: blur(10px);
+}
+.grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+h2 {
+  margin: 0 0 12px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+h2 .count {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0; color: var(--ink);
+  background: rgba(255, 255, 255, 0.07); border-radius: 20px; padding: 1px 8px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  position: sticky; top: 0; text-align: left; font-weight: 500; color: var(--muted);
+  padding: 5px 8px; border-bottom: 1px solid var(--line); background: rgba(8, 11, 15, 0.86);
+  backdrop-filter: blur(4px); white-space: nowrap;
+}
+td { padding: 7px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); white-space: nowrap; }
+tbody tr:hover td { background: rgba(255, 255, 255, 0.026); }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+td.wide { white-space: normal; min-width: 190px; color: var(--muted); font-size: 12px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.muted { color: var(--muted); }
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 11px;
+  border: 1px solid var(--line); color: var(--muted);
+}
+.pill.entered { color: #56d364; border-color: rgba(63, 185, 80, 0.4); background: rgba(63, 185, 80, 0.1); }
+.pill.blocked { color: #ffa198; border-color: rgba(248, 81, 73, 0.4); background: rgba(248, 81, 73, 0.09); }
+.pill.judged { color: #79c0ff; border-color: rgba(88, 166, 255, 0.4); background: rgba(88, 166, 255, 0.09); }
+.curve { width: 100%; height: 132px; display: block; }
+.foot { margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center; }
+.reveal { opacity: 0; transform: translateY(10px); }
+.reveal.in {
+  opacity: 1; transform: none;
+  transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (max-width: 880px) {
+  .hero { grid-template-columns: 1fr; }
+  .grid.two { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; }
+  .grain { animation: none; }
+  .orb-fallback { animation: none; }
+}
+
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="wrap">
+  <header class="hero reveal">
+    <div class="orb-wrap">
+      <canvas id="orb" data-tint="#f85149" aria-hidden="true"></canvas>
+      <div class="orb-fallback" aria-hidden="true"></div>
+    </div>
+    <div>
+      <p class="eyebrow">Paper trading desk</p>
+      <h1>CoinPilot</h1>
+      <p class="lede">solana · six sub-agents · simulated fills only, no wallet, no keys</p>
+      <div class="kpis"><div class="kpi reveal"><span>Equity</span><b class="" data-count="944.713524" data-decimals="2" data-prefix="$" data-suffix="">$944.71</b></div><div class="kpi reveal"><span>Unrealized</span><b class="down" data-count="-5.798809" data-decimals="2" data-prefix="$" data-suffix="">$-5.80</b></div><div class="kpi reveal"><span>Realized today</span><b class="down" data-count="-49.487667" data-decimals="2" data-prefix="$" data-suffix="">$-49.49</b></div><div class="kpi reveal"><span>Realized all-time</span><b class="down" data-count="-49.487667" data-decimals="2" data-prefix="$" data-suffix="">$-49.49</b></div><div class="kpi reveal"><span>Win rate</span><b class="" data-count="0.000000" data-decimals="0" data-prefix="" data-suffix="%">0%</b></div><div class="kpi reveal"><span>Closed trades</span><b class="" data-count="1.000000" data-decimals="0" data-prefix="" data-suffix="">1</b></div><div class="kpi reveal"><span>Open positions</span><b class="" data-count="3.000000" data-decimals="0" data-prefix="" data-suffix="">3</b></div></div>
+    </div>
+  </header>
+
+  <section class="card reveal">
+    <h2>Equity curve <span class="count">3 open</span></h2>
+    <svg class="curve" viewBox="0 0 620 120" preserveAspectRatio="none" role="img" aria-label="Cumulative realized PnL: $-49.49"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f85149" stop-opacity="0.28"/><stop offset="100%" stop-color="#f85149" stop-opacity="0"/></linearGradient></defs><path d="M0,120 L0.0,10.0 L620.0,110.0 L620,120 Z" fill="url(#fill)"/><path d="M0.0,10.0 L620.0,110.0" fill="none" stroke="#f85149" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="620.0" cy="110.0" r="3.5" fill="#f85149"/><text x="4" y="12" fill="#8b949e" font-size="10">low $-49.49</text><text x="616" y="12" text-anchor="end" fill="#8b949e" font-size="10">high $0.00</text></svg>
+  </section>
+
+  <section class="card reveal">
+    <h2>Open positions <span class="count">3</span></h2>
+    <table><thead><tr><th class="" scope="col">Token</th><th class="num" scope="col">Entry</th><th class="num" scope="col">Entry price</th><th class="num" scope="col">Mark</th><th class="num" scope="col">Value</th><th class="num" scope="col">PnL</th><th class="num" scope="col">Held</th><th class="" scope="col">Thesis</th></tr></thead><tbody><tr><td><a href="https://dexscreener.com/solana/2xCd5qHX5tW6pGUo7zfgHSSAnRjJwPA7Sz1Fu4fWcJjX" target="_blank" rel="noopener">Mandy</a></td><td class="num">$50.00</td><td class="num">0.000224</td><td class="num">0.000216</td><td class="num">$47.86</td><td class="num down">$-2.14 (-4.3%)</td><td class="num">47m</td><td class="wide">rule engine: liquidity $43,950 (+1); turnover 28.0x (+12); 1h buy pressure 58% (+3)</td></tr><tr><td><a href="https://dexscreener.com/solana/7bCiddGLe5aM8HE2pigT9jsqkmC1HSPxyXN6GkHEpump" target="_blank" rel="noopener">OGTA</a></td><td class="num">$50.00</td><td class="num">0.001267</td><td class="num">0.001205</td><td class="num">$47.33</td><td class="num down">$-2.67 (-5.3%)</td><td class="num">47m</td><td class="wide">rule engine: liquidity $82,975 (+3); turnover 17.1x (+12); 1h buy pressure 80% (+12)</td></tr><tr><td><a href="https://dexscreener.com/solana/GQngHP8P6s45MxWnU7JsocfV2HjPQdJZmCEAYKpBpump" target="_blank" rel="noopener">MANDY</a></td><td class="num">$50.00</td><td class="num">0.000444</td><td class="num">0.000438</td><td class="num">$49.01</td><td class="num down">$-0.99 (-2.0%)</td><td class="num">0m</td><td class="wide">rule engine: liquidity $46,742 (+2); turnover 6.0x (+12); 1h buy pressure 75% (+10)</td></tr></tbody></table>
+  </section>
+
+  <section class="card reveal">
+    <h2>Watchlist <span class="count">6</span></h2>
+    <p class="muted">Latest scan 11-19 21:15 UTC · 6 token(s) scored</p>
+    <table><thead><tr><th class="" scope="col">Token</th><th class="num" scope="col">Score</th><th class="num" scope="col">Liquidity</th><th class="num" scope="col">Volume 24h</th><th class="num" scope="col">Age</th><th class="num" scope="col">24h</th><th class="num" scope="col">Seen</th><th class="" scope="col">Status</th><th class="" scope="col">Why</th></tr></thead><tbody><tr><td><a href="https://dexscreener.com/solana/GQngHP8P6s45MxWnU7JsocfV2HjPQdJZmCEAYKpBpump" target="_blank" rel="noopener">MANDY</a></td><td class="num">76.5</td><td class="num">$47k</td><td class="num">$282k</td><td class="num">34m</td><td class="num up">969%</td><td class="num">1x</td><td><span class="pill entered">entered</span></td><td class="wide">rule engine: liquidity $46,742 (+2); turnover 6.0x (+12); 1h buy pressure 75% (+10)</td></tr><tr><td><a href="https://dexscreener.com/solana/82u71wqQSa4NmD1UTTDwKyh5EUm3xe9pMp4UZXhFpump" target="_blank" rel="noopener">DAINU</a></td><td class="num">71.8</td><td class="num">$51k</td><td class="num">$491k</td><td class="num">34m</td><td class="num up">1,325%</td><td class="num">1x</td><td><span class="pill seen">seen</span></td><td class="wide"></td></tr><tr><td><a href="https://dexscreener.com/solana/FVzqGqRmr4UH1Fif6dewmwbJ1p4YUZCu8dcw4Efopump" target="_blank" rel="noopener">HOGE</a></td><td class="num">64.8</td><td class="num">$125k</td><td class="num">$919k</td><td class="num">6,619m</td><td class="num down">-22%</td><td class="num">1x</td><td><span class="pill seen">seen</span></td><td class="wide"></td></tr><tr><td><a href="https://dexscreener.com/solana/B34nXKzCgsJb9ChLuSHPRpXLE3WFSWyeT8Cqkzzmpump" target="_blank" rel="noopener">FIONA</a></td><td class="num">61.7</td><td class="num">$38k</td><td class="num">$783k</td><td class="num">22m</td><td class="num up">735%</td><td class="num">1x</td><td><span class="pill seen">seen</span></td><td class="wide"></td></tr><tr><td><a href="https://dexscreener.com/solana/9QT8K685Hrae4k11dhGXirdtpfAaimExtyfwt8cPpump" target="_blank" rel="noopener">DIGS</a></td><td class="num">56.9</td><td class="num">$61k</td><td class="num">$971k</td><td class="num">32,202m</td><td class="num down">-7%</td><td class="num">1x</td><td><span class="pill seen">seen</span></td><td class="wide"></td></tr><tr><td><a href="https://dexscreener.com/solana/GexThZHgaswpAQ7Fi8QrHFubjPimUNSYhJiAA7XZpump" target="_blank" rel="noopener">WASTED</a></td><td class="num">56.4</td><td class="num">$100k</td><td class="num">$522k</td><td class="num">28,986m</td><td class="num down">-7%</td><td class="num">1x</td><td><span class="pill seen">seen</span></td><td class="wide"></td></tr></tbody></table>
+  </section>
+
+  <div class="grid two">
+    <section class="card reveal">
+      <h2>Recent trades <span class="count">1 closed</span></h2>
+      <table><thead><tr><th class="" scope="col">When</th><th class="" scope="col">Side</th><th class="" scope="col">Token</th><th class="num" scope="col">USD</th><th class="num" scope="col">Price</th><th class="num" scope="col">PnL</th><th class="" scope="col">Reason</th></tr></thead><tbody><tr><td class="muted">11-19 21:15</td><td class="up">BUY</td><td>MANDY</td><td class="num">$50.00</td><td class="num">0.000444</td><td class="num muted">-</td><td class="wide">rule engine: liquidity $46,742 (+2); turnover 6.0x (+12); 1h buy pressure 75% (+10)</td></tr><tr><td class="muted">11-19 21:15</td><td class="down">SELL</td><td>DATITTY</td><td class="num">$0.51</td><td class="num">0.0000013583</td><td class="num down">-49.49</td><td class="wide">stop loss -99%</td></tr><tr><td class="muted">11-19 20:28</td><td class="up">BUY</td><td>OGTA</td><td class="num">$50.00</td><td class="num">0.001267</td><td class="num muted">-</td><td class="wide">rule engine: liquidity $82,975 (+3); turnover 17.1x (+12); 1h buy pressure 80% (+12)</td></tr><tr><td class="muted">11-19 20:28</td><td class="up">BUY</td><td>DATITTY</td><td class="num">$50.00</td><td class="num">0.000131</td><td class="num muted">-</td><td class="wide">rule engine: liquidity $25,108 (+0); turnover 13.9x (+12); 1h buy pressure 86% (+12)</td></tr><tr><td class="muted">11-19 20:28</td><td class="up">BUY</td><td>Mandy</td><td class="num">$50.00</td><td class="num">0.000224</td><td class="num muted">-</td><td class="wide">rule engine: liquidity $43,950 (+1); turnover 28.0x (+12); 1h buy pressure 58% (+3)</td></tr></tbody></table>
+    </section>
+
+    <section class="card reveal">
+      <h2>Analyst verdicts <span class="count">4</span></h2>
+      <table><thead><tr><th class="" scope="col">When</th><th class="" scope="col">Token</th><th class="" scope="col">Verdict</th><th class="num" scope="col">Score</th><th class="" scope="col">Source</th><th class="" scope="col">Thesis</th></tr></thead><tbody><tr><td class="muted">11-19 21:15</td><td>MANDY</td><td class="up">buy</td><td class="num">76</td><td class="muted">rules</td><td class="wide">rule engine: liquidity $46,742 (+2); turnover 6.0x (+12); 1h buy pressure 75% (+10)</td></tr><tr><td class="muted">11-19 20:28</td><td>OGTA</td><td class="up">buy</td><td class="num">76</td><td class="muted">rules</td><td class="wide">rule engine: liquidity $82,975 (+3); turnover 17.1x (+12); 1h buy pressure 80% (+12)</td></tr><tr><td class="muted">11-19 20:28</td><td>DATITTY</td><td class="up">buy</td><td class="num">79</td><td class="muted">rules</td><td class="wide">rule engine: liquidity $25,108 (+0); turnover 13.9x (+12); 1h buy pressure 86% (+12)</td></tr><tr><td class="muted">11-19 20:28</td><td>Mandy</td><td class="up">buy</td><td class="num">80</td><td class="muted">rules</td><td class="wide">rule engine: liquidity $43,950 (+1); turnover 28.0x (+12); 1h buy pressure 58% (+3)</td></tr></tbody></table>
+    </section>
+  </div>
+
+  <p class="foot">
+    Generated 2026-11-19 21:15 UTC ·
+    kill switch off ·
+    paper fills only, nothing is signed
+  </p>
+</div>
+
+<script type="module">
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function formatNumber(value, decimals) {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function countUp(el) {
+  const target = parseFloat(el.dataset.count);
+  if (!Number.isFinite(target)) return;
+  const decimals = parseInt(el.dataset.decimals || "2", 10);
+  const prefix = el.dataset.prefix || "";
+  const suffix = el.dataset.suffix || "";
+  if (reduceMotion) {
+    el.textContent = prefix + formatNumber(target, decimals) + suffix;
+    return;
+  }
+  const start = performance.now();
+  const duration = 850;
+  const tick = (now) => {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = prefix + formatNumber(target * eased, decimals) + suffix;
+    if (progress < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+document.querySelectorAll("[data-count]").forEach(countUp);
+
+const revealer = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("in");
+        revealer.unobserve(entry.target);
+      }
+    }
+  },
+  { rootMargin: "0px 0px -6% 0px" }
+);
+document.querySelectorAll(".reveal").forEach((el) => revealer.observe(el));
+
+// Optional: Motion (motion.dev) adds a stagger to table rows and cards.
+(async () => {
+  if (reduceMotion) return;
+  try {
+    const { animate, stagger } = await import("https://cdn.jsdelivr.net/npm/motion@11/+esm");
+    animate(
+      "tbody tr",
+      { opacity: [0, 1], transform: ["translateY(6px)", "translateY(0px)"] },
+      { delay: stagger(0.012, { start: 0.05 }), duration: 0.4, easing: "ease-out" }
+    );
+    animate(".kpi", { transform: ["translateY(4px)", "translateY(0px)"], opacity: [0.6, 1] }, { delay: stagger(0.03), duration: 0.45 });
+  } catch (error) {
+    // Motion is a progressive enhancement; the CSS reveal already covered it.
+  }
+})();
+
+// Optional: three.js renders the orb. Without WebGL the CSS orb shows instead.
+(() => {
+  const canvas = document.getElementById("orb");
+  if (!canvas) return;
+  import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js")
+    .then((THREE) => drawOrb(THREE, canvas))
+    .catch(() => document.documentElement.classList.add("no-webgl"));
+})();
+
+function drawOrb(THREE, canvas) {
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  } catch (error) {
+    document.documentElement.classList.add("no-webgl");
+    return;
+  }
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.z = 3.15;
+
+  const uniforms = {
+    uTime: { value: 0 },
+    uTint: { value: new THREE.Color(canvas.dataset.tint || "#3fb950") },
+  };
+
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    transparent: true,
+    depthWrite: false,
+    vertexShader: `
+      uniform float uTime;
+      varying float vNoise;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vec3 p = position;
+        float n = sin(p.x * 2.6 + uTime * 0.9) * sin(p.y * 2.2 - uTime * 0.7) * sin(p.z * 2.9 + uTime * 0.5);
+        n += 0.45 * sin(p.y * 5.3 + uTime * 1.5);
+        vNoise = n;
+        p += normal * n * 0.085;
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uTint;
+      varying float vNoise;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        float facing = max(dot(normalize(vNormal), normalize(vView)), 0.0);
+        float rim = pow(1.0 - facing, 2.3);
+        float band = 0.5 + 0.5 * sin(vNoise * 3.4);
+        vec3 color = mix(uTint * 0.32, uTint, clamp(rim, 0.0, 1.0));
+        float alpha = clamp(0.16 + rim * 0.9, 0.0, 0.95);
+        gl_FragColor = vec4(color * (0.55 + 0.65 * band), alpha);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 48), material);
+  scene.add(mesh);
+
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect();
+    const size = Math.max(rect.width || 224, 1);
+    renderer.setSize(size, size, false);
+    camera.aspect = 1;
+    camera.updateProjectionMatrix();
+  };
+  resize();
+  window.addEventListener("resize", resize);
+
+  const clock = new THREE.Clock();
+  const frame = () => {
+    const t = clock.getElapsedTime();
+    uniforms.uTime.value = t;
+    mesh.rotation.y = t * 0.14;
+    mesh.rotation.x = Math.sin(t * 0.22) * 0.14;
+    renderer.render(scene, camera);
+    if (!reduceMotion) requestAnimationFrame(frame);
+  };
+  frame();
+}
+
+</script>
+</body>
+</html>
