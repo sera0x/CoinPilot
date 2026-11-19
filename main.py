@@ -360,6 +360,8 @@ def find_entries(settings: dict, connection) -> list[dict]:
                     "snapshot": snap,
                     "size_usd": verdict.get("size_usd"),
                     "reason": thesis[:400],
+                    # entry-time signal contributions, graded when the trade closes
+                    "features": (candidate.get("rule") or {}).get("groups") or {},
                 },
                 timeout=60,
             )

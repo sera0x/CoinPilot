@@ -1,4 +1,8 @@
-"""Sub-agent: resolve raw leads into prices, then keep only what survives the filters."""
+"""Sub-agent: resolve raw leads into prices, then keep only what survives the filters.
+
+After the hard screens, a credibility pass (RugCheck) runs over the shortlist
+head, and scoring uses the learned per-group weights (coinpilot.learn).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from coinpilot import agentio, market, strategy
+from coinpilot import agentio, credibility, learn, market, store, strategy
 from coinpilot import config as config_mod
 
 SOURCE_KIND = ("news", "forums", "feeds")
@@ -124,6 +128,12 @@ def handler(payload: dict) -> dict:
     leads = payload.get("leads") or []
     exclude = {token for token in (payload.get("exclude_tokens") or []) if token}
 
+    connection = store.connect(config_mod.db_path(config))
+    try:
+        weights = learn.load(connection)["mult"]
+    finally:
+        connection.close()
+
     merged: dict[str, dict] = {}
     mints, ticker_mentions, ticker_lead = _tally(leads)
 
@@ -133,6 +143,7 @@ def handler(payload: dict) -> dict:
         _resolve_live(config, leads, merged, ticker_mentions, ticker_lead)
 
     limit = int(payload.get("max_candidates") or scan.get("max_candidates") or 8)
+    budget = int(scan.get("credibility_checks") or 8)
     candidates: list[dict] = []
     skipped: list[dict] = []
 
@@ -145,7 +156,7 @@ def handler(payload: dict) -> dict:
             skipped.append({"symbol": snap.get("symbol"), "reason": reason})
             continue
 
-        rule = strategy.rule_score(snap, config)
+        rule = strategy.rule_score(snap, config, weights)
         corroboration = int(entry["corroboration"])
         if corroboration > 1:
             bonus = min(2.0 * (corroboration - 1), 8.0)
@@ -158,8 +169,32 @@ def handler(payload: dict) -> dict:
                 "rule": rule,
                 "corroboration": corroboration,
                 "sources": sorted(entry["sources"]),
+                "credibility": "not checked",
             }
         )
+
+    candidates.sort(key=lambda item: item["rule"]["score"], reverse=True)
+
+    # Credibility pass over the shortlist head only, to respect the API budget.
+    # Skipped in offline mode (selftest / no-network runs).
+    if not payload.get("offline"):
+        for candidate in candidates[:budget]:
+        snap = candidate["snapshot"]
+        address = snap.get("token_address")
+        if not address:
+            continue
+        cred = credibility.check(address)
+        if cred["reject"]:
+            agentio.log(f"{snap.get('symbol')}: rejected - {cred['reject']}")
+            candidate["rule"]["score"] = 0.0
+            candidate["credibility"] = cred["reject"]
+            continue
+        if cred["adjust"]:
+            candidate["rule"]["score"] = round(
+                min(100.0, max(0.0, candidate["rule"]["score"] + cred["adjust"])), 1
+            )
+        candidate["rule"]["signals"].append(cred["note"])
+        candidate["credibility"] = cred["note"]
 
     candidates.sort(key=lambda item: item["rule"]["score"], reverse=True)
 

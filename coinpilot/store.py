@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS positions (
     close_usd REAL,
     pnl_usd REAL,
     status TEXT NOT NULL DEFAULT 'open',
-    thesis TEXT
+    thesis TEXT,
+    features TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions (status);
@@ -71,7 +72,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     corroboration INTEGER DEFAULT 0,
     sources TEXT,
     status TEXT DEFAULT 'seen',
-    reason TEXT
+    reason TEXT,
+    credibility TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_candidates_ts ON candidates (ts);
@@ -86,6 +88,19 @@ def connect(path: str | Path) -> sqlite3.Connection:
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA busy_timeout=10000")
     connection.executescript(SCHEMA)
+    # Light migrations for ledgers created before a column existed.
+    position_columns = {row["name"] for row in connection.execute("PRAGMA table_info(positions)")}
+    if "features" not in position_columns:
+        try:
+            connection.execute("ALTER TABLE positions ADD COLUMN features TEXT")
+        except sqlite3.OperationalError:
+            pass
+    candidate_columns = {row["name"] for row in connection.execute("PRAGMA table_info(candidates)")}
+    if "credibility" not in candidate_columns:
+        try:
+            connection.execute("ALTER TABLE candidates ADD COLUMN credibility TEXT")
+        except sqlite3.OperationalError:
+            pass
     connection.commit()
     return connection
 
@@ -187,6 +202,29 @@ def update_peak(connection: sqlite3.Connection, position_id: int, peak_price: fl
     connection.commit()
 
 
+def set_position_features(connection: sqlite3.Connection, position_id: int, features: dict) -> None:
+    """Record the entry-time per-group score contributions so closes can grade them."""
+
+    connection.execute(
+        "UPDATE positions SET features = ? WHERE id = ?",
+        (json.dumps(features, default=str)[:4000], int(position_id)),
+    )
+    connection.commit()
+
+
+def get_position_features(connection: sqlite3.Connection, position_id: int) -> dict:
+    row = connection.execute(
+        "SELECT features FROM positions WHERE id = ?", (int(position_id),)
+    ).fetchone()
+    if not row or not row["features"]:
+        return {}
+    try:
+        data = json.loads(row["features"])
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def add_trade(
     connection: sqlite3.Connection,
     token_address: str,
@@ -276,13 +314,14 @@ def record_candidates(connection: sqlite3.Connection, candidates: list[dict], ts
                 ",".join(item.get("sources") or []),
                 "seen",
                 "",
+                str(item.get("credibility") or ""),
             )
         )
     if rows:
         connection.executemany(
             "INSERT INTO candidates "
             "(ts, token_address, symbol, score, liquidity_usd, volume_h24, age_minutes, change_h24, "
-            "corroboration, sources, status, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "corroboration, sources, status, reason, credibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
         connection.commit()

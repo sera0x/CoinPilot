@@ -57,6 +57,7 @@ DEFAULTS: dict = {
         "max_age_hours": 720,
         "min_trades_24h": 20,
         "max_addresses": 60,
+        "credibility_checks": 8,
         "max_candidates": 8,
     },
     "strategy": {

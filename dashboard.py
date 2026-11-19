@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from coinpilot import config as config_mod
-from coinpilot import market, store
+from coinpilot import learn, market, store
 
 CSS = """
 :root {
@@ -681,9 +681,146 @@ def build(db_path: Path, out_dir: Path) -> None:
     print(f"dashboard written to {out_dir / 'index.html'}")
 
 
+def collect(db_path: Path) -> dict:
+    """Everything the React dashboard needs, as plain JSON."""
+
+    settings = config_mod.load_config()
+    chain = settings["chain"]
+    connection = store.connect(db_path)
+    try:
+        store.bootstrap(
+            connection,
+            float(settings["risk"]["starting_cash_usd"]),
+            datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        )
+        stats = store.totals(connection)
+        positions = store.open_positions(connection)
+        wins = store.win_stats(connection)
+        watchlist = store.latest_candidates(connection, 40)
+        learning = learn.load(connection)
+        curve = [
+            float(stats["starting_cash_usd"]) + value
+            for value in store.realized_series(connection)
+        ]
+
+        marks: dict[str, dict] = {}
+        if positions:
+            try:
+                marks = market.token_snapshots(chain, [item["token_address"] for item in positions])
+            except Exception as exc:  # noqa: BLE001 - marks are cosmetic
+                print(f"mark lookup failed: {exc}")
+
+        position_view = []
+        market_value = 0.0
+        for position in positions:
+            mark = marks.get(position["token_address"]) or {}
+            price = mark.get("price_usd") or position["entry_price"]
+            value = float(position["qty"]) * float(price)
+            market_value += value
+            pnl = value - float(position["entry_usd"])
+            entry_usd = float(position["entry_usd"])
+            position_view.append(
+                {
+                    "id": position["id"],
+                    "symbol": position["symbol"],
+                    "token_address": position["token_address"],
+                    "entry_usd": entry_usd,
+                    "entry_price": float(position["entry_price"]),
+                    "mark_price": float(price),
+                    "value_usd": value,
+                    "pnl_usd": pnl,
+                    "pnl_pct": (pnl / entry_usd * 100.0) if entry_usd else 0.0,
+                    "held_minutes": (time.time() - float(position["opened_at"])) / 60.0,
+                    "thesis": (position.get("thesis") or "")[:400],
+                }
+            )
+
+        equity = stats["cash_usd"] + market_value
+        unrealized = market_value - sum(float(item["entry_usd"]) for item in positions)
+
+        watch_view = [
+            {
+                "symbol": item.get("symbol") or "?",
+                "token_address": item["token_address"],
+                "score": float(item.get("score") or 0.0),
+                "liquidity": item.get("liquidity_usd"),
+                "volume": item.get("volume_h24"),
+                "age": item.get("age_minutes"),
+                "change": item.get("change_h24"),
+                "corroboration": int(item.get("corroboration") or 0),
+                "sources": item.get("sources") or "",
+                "status": item.get("status") or "seen",
+                "reason": (item.get("reason") or "")[:200],
+                "credibility": item.get("credibility") or "",
+            }
+            for item in watchlist
+        ]
+
+        trade_view = [
+            {
+                "ts": trade["ts"],
+                "side": trade["side"],
+                "symbol": trade["symbol"],
+                "usd": float(trade["usd"]),
+                "price": float(trade["price"]),
+                "pnl": trade.get("pnl_usd"),
+                "reason": (trade.get("reason") or "")[:200],
+            }
+            for trade in store.recent_trades(connection, 40)
+        ]
+
+        verdicts = []
+        raw = connection.execute(
+            "SELECT ts, symbol, payload FROM decisions WHERE stage = 'analyst' ORDER BY ts DESC LIMIT 20"
+        ).fetchall()
+        for row in raw:
+            try:
+                payload = json.loads(row["payload"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            verdicts.append(
+                {
+                    "ts": row["ts"],
+                    "symbol": row["symbol"] or "?",
+                    "action": str(payload.get("action") or "?"),
+                    "score": payload.get("score"),
+                    "source": str(payload.get("source") or "?"),
+                    "thesis": (payload.get("thesis") or "")[:300],
+                    "confidence": payload.get("confidence"),
+                    "risks": payload.get("risks") or [],
+                }
+            )
+
+        return {
+            "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "chain": chain,
+            "account": {
+                "starting_cash": stats["starting_cash_usd"],
+                "cash": stats["cash_usd"],
+                "equity": equity,
+                "unrealized": unrealized,
+                "realized_today": stats["realized_pnl_today"],
+                "realized_total": stats["realized_pnl_total"],
+                "trades_today": stats["trades_today"],
+                "day": stats["day"],
+                "kill": config_mod.kill_switch_path(settings).exists(),
+            },
+            "win_stats": wins,
+            "curve": curve,
+            "positions": position_view,
+            "watchlist": watch_view,
+            "trades": trade_view,
+            "verdicts": verdicts,
+            "learning": learning,
+            "last_scan": store.last_candidate_time(connection),
+        }
+    finally:
+        connection.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="dashboard", description="Render the paper portfolio as a static page.")
-    parser.add_argument("command", choices=["build"])
+    parser.add_argument("command", choices=["build", "data"], help="build: static HTML fallback; data: JSON feed for the React dashboard")
     parser.add_argument("--db", default=None, help="path to the SQLite ledger")
     parser.add_argument("--out", default="dist", help="output directory")
     args = parser.parse_args()
@@ -693,6 +830,14 @@ def main() -> int:
     if not db.exists():
         print(f"no ledger at {db}; run the bot first")
         return 1
+    if args.command == "data":
+        out_dir = Path(args.out)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "data.json"
+        out_path.write_text(json.dumps(collect(db), default=str), encoding="utf-8")
+        print(f"data feed written to {out_path}")
+        return 0
+
     build(db, Path(args.out))
     return 0
 

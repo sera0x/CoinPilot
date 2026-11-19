@@ -73,15 +73,29 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python3 main.py once
 
-      - name: Build dashboard
+      - name: Build swarm dashboard (React + three.js)
+        id: swarm
+        continue-on-error: true
+        run: |
+          cd dashboard
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Static fallback if the swarm build failed
+        if: steps.swarm.outcome == 'failure'
         run: python3 dashboard.py build --db data/coinpilot.db --out dist
+
+      - name: Attach data.json feed
+        run: |
+          mkdir -p dist
+          python3 dashboard.py data --db data/coinpilot.db --out dist
 
       - name: Save ledger + dashboard copy to the ledger branch
         run: |
           git config user.name "coinpilot-bot"
           git config user.email "bot@users.noreply.github.com"
           cp data/coinpilot.db /tmp/coinpilot.db
-          mkdir -p /tmp/site && cp dist/index.html /tmp/site/index.html
+          mkdir -p /tmp/site && cp dist/index.html dist/data.json /tmp/site/
           git fetch origin ledger --depth=1 || true
           if git show-ref --verify -q refs/remotes/origin/ledger; then
             git branch -f ledger origin/ledger
@@ -91,9 +105,9 @@ jobs:
           fi
           mkdir -p data site
           cp /tmp/coinpilot.db data/coinpilot.db
-          cp /tmp/site/index.html site/index.html
+          cp /tmp/site/index.html /tmp/site/data.json site/
           # -f: the checked-out .gitignore ignores data/ even on this branch
-          git add -f data/coinpilot.db site/index.html
+          git add -f data/coinpilot.db site/index.html site/data.json
           if git status --porcelain | grep -q .; then
             git commit -m "ledger + site: cycle $(date -u +%FT%TZ)"
             git push origin ledger

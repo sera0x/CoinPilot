@@ -1,4 +1,8 @@
-"""Sub-agent: the only process that writes positions, through the paper broker."""
+"""Sub-agent: the only process that writes positions, through the paper broker.
+
+Opening a position also stores its entry-time signal contributions, and
+closing one feeds the outcome back to the learner (coinpilot.learn).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from coinpilot import agentio, broker, market, store
+from coinpilot import agentio, broker, learn, market, store
 from coinpilot import config as config_mod
 
 
@@ -25,6 +29,14 @@ def _close(config: dict, connection, payload: dict) -> dict:
         return {"ok": True, "action": "close", "skipped": "no price available"}
 
     result = broker.sell(connection, position, snap, config, payload.get("reason") or "exit rule")
+
+    # Self-learning: grade the entry-time signal contributions against the result.
+    features = store.get_position_features(connection, position_id)
+    if features:
+        state = learn.load(connection)
+        learn.apply_outcome(state, features, float(result.get("pnl_pct") or 0.0))
+        learn.save(connection, state)
+
     return {"ok": True, "action": "close", **result}
 
 
@@ -36,6 +48,11 @@ def _open(config: dict, connection, payload: dict) -> dict:
     if size <= 0:
         return {"ok": False, "error": "size_usd must be positive"}
     result = broker.buy(connection, snap, size, config, payload.get("reason") or "")
+
+    features = payload.get("features")
+    if isinstance(features, dict) and features:
+        store.set_position_features(connection, int(result["position_id"]), features)
+
     return {"ok": True, "action": "open", **result}
 
 
