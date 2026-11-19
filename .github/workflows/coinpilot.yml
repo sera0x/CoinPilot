@@ -3,10 +3,15 @@ name: CoinPilot paper cycle
 # Runs the Python paper bot on a schedule, keeps its SQLite ledger on a
 # "ledger" branch, and publishes the static dashboard to GitHub Pages.
 #
+# A push to main also runs one cycle, so a change is exercised straight away
+# instead of waiting for the cron. The ledger push goes to the "ledger" branch,
+# which this trigger ignores, so cycles cannot cascade.
+#
 # One-time manual steps in the repo:
 #   1. Settings -> Pages -> Source: "GitHub Actions"
-#   2. Optional: Settings -> Secrets -> add OPENAI_API_KEY for the LLM analyst
-#   3. Kill switch: commit an empty file named KILL to the default branch
+#   2. Settings -> Variables -> ENABLE_PAGES = on (publishes the dashboard)
+#   3. Optional: Settings -> Secrets -> add OPENAI_API_KEY for the LLM analyst
+#   4. Kill switch: commit an empty file named KILL to the default branch
 
 on:
   schedule:
@@ -38,7 +43,6 @@ jobs:
       - run: python3 selftest.py
 
   cycle:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -106,10 +110,11 @@ jobs:
 
   pages:
     # The dashboard HTML is always uploaded as the "dashboard" artifact of the
-    # cycle job, which works on private repos with no extra setup. Publishing
-    # to a real Pages site additionally needs a public repo or GitHub Pro:
-    # flip that on and set the ENABLE_PAGES repo variable to "on" to use it.
-    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.ENABLE_PAGES == 'on'
+    # cycle job, which needs no extra setup. Publishing a live Pages site also
+    # needs the Pages source set to "GitHub Actions" and the ENABLE_PAGES repo
+    # variable set to "on"; without the variable this job is skipped and the
+    # cycle still succeeds.
+    if: vars.ENABLE_PAGES == 'on'
     needs: cycle
     runs-on: ubuntu-latest
     permissions:
