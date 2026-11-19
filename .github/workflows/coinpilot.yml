@@ -58,6 +58,10 @@ jobs:
           fi
 
       - name: Run one cycle
+        id: cycle
+        # A flaky feed should not cost us the ledger commit or the dashboard.
+        # The run still goes red, below, so failures are visible.
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python3 main.py once
@@ -93,6 +97,12 @@ jobs:
         with:
           name: dashboard
           path: dist
+
+      - name: Report a failed cycle
+        if: steps.cycle.outcome == 'failure'
+        run: |
+          echo "::error::the paper cycle failed; the ledger and dashboard were still saved"
+          exit 1
 
   pages:
     # The dashboard HTML is always uploaded as the "dashboard" artifact of the
