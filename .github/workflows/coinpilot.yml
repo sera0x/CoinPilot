@@ -8,10 +8,13 @@ name: CoinPilot paper cycle
 # which this trigger ignores, so cycles cannot cascade.
 #
 # One-time manual steps in the repo:
-#   1. Settings -> Pages -> Source: "GitHub Actions"
-#   2. Settings -> Variables -> ENABLE_PAGES = on (publishes the dashboard)
-#   3. Optional: Settings -> Secrets -> add OPENAI_API_KEY for the LLM analyst
-#   4. Kill switch: commit an empty file named KILL to the default branch
+#   1. Optional: Settings -> Secrets -> add OPENAI_API_KEY for the LLM analyst
+#   2. Kill switch: commit an empty file named KILL to the default branch
+#
+# Pages self-configures (enablement: true), and each cycle also commits the
+# built dashboard to the ledger branch as site/index.html, viewable at
+# https://raw.githack.com/sera0x/CoinPilot/ledger/site/index.html even if
+# Pages is down.
 
 on:
   schedule:
@@ -73,11 +76,12 @@ jobs:
       - name: Build dashboard
         run: python3 dashboard.py build --db data/coinpilot.db --out dist
 
-      - name: Save ledger back to the ledger branch
+      - name: Save ledger + dashboard copy to the ledger branch
         run: |
           git config user.name "coinpilot-bot"
           git config user.email "bot@users.noreply.github.com"
           cp data/coinpilot.db /tmp/coinpilot.db
+          mkdir -p /tmp/site && cp dist/index.html /tmp/site/index.html
           git fetch origin ledger --depth=1 || true
           if git show-ref --verify -q refs/remotes/origin/ledger; then
             git branch -f ledger origin/ledger
@@ -85,12 +89,13 @@ jobs:
           else
             git switch --orphan ledger
           fi
-          mkdir -p data
+          mkdir -p data site
           cp /tmp/coinpilot.db data/coinpilot.db
+          cp /tmp/site/index.html site/index.html
           # -f: the checked-out .gitignore ignores data/ even on this branch
-          git add -f data/coinpilot.db
-          if git status --porcelain -- data/coinpilot.db | grep -q .; then
-            git commit -m "ledger: cycle $(date -u +%FT%TZ)"
+          git add -f data/coinpilot.db site/index.html
+          if git status --porcelain | grep -q .; then
+            git commit -m "ledger + site: cycle $(date -u +%FT%TZ)"
             git push origin ledger
           else
             echo "ledger unchanged; nothing to commit"
@@ -109,12 +114,10 @@ jobs:
           exit 1
 
   pages:
-    # The dashboard HTML is always uploaded as the "dashboard" artifact of the
-    # cycle job, which needs no extra setup. Publishing a live Pages site also
-    # needs the Pages source set to "GitHub Actions" and the ENABLE_PAGES repo
-    # variable set to "on"; without the variable this job is skipped and the
-    # cycle still succeeds.
-    if: vars.ENABLE_PAGES == 'on'
+    # Self-enabling: configure-pages with enablement: true creates the Pages
+    # site with the workflow token if it does not exist yet, so no manual
+    # Settings change is needed. If this job ever fails, the dashboard copy on
+    # the ledger branch (site/index.html) is the fallback view.
     needs: cycle
     runs-on: ubuntu-latest
     permissions:
@@ -129,6 +132,8 @@ jobs:
           name: dashboard
           path: dist
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
