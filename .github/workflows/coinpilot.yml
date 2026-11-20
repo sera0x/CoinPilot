@@ -95,7 +95,8 @@ jobs:
           git config user.name "coinpilot-bot"
           git config user.email "bot@users.noreply.github.com"
           cp data/coinpilot.db /tmp/coinpilot.db
-          mkdir -p /tmp/site && cp dist/index.html dist/data.json /tmp/site/
+          # The React build is split across index.html + hashed assets; mirror all of it
+          mkdir -p /tmp/site && cp -r dist/. /tmp/site/
           git fetch origin ledger --depth=1 || true
           if git show-ref --verify -q refs/remotes/origin/ledger; then
             git branch -f ledger origin/ledger
@@ -103,11 +104,12 @@ jobs:
           else
             git switch --orphan ledger
           fi
-          mkdir -p data site
+          mkdir -p data
           cp /tmp/coinpilot.db data/coinpilot.db
-          cp /tmp/site/index.html /tmp/site/data.json site/
+          # Hashed asset names change per build: wipe the old mirror so stale files don't pile up
+          rm -rf site && mkdir -p site && cp -r /tmp/site/. site/
           # -f: the checked-out .gitignore ignores data/ even on this branch
-          git add -f data/coinpilot.db site/index.html site/data.json
+          git add -f data/coinpilot.db site
           if git status --porcelain | grep -q .; then
             git commit -m "ledger + site: cycle $(date -u +%FT%TZ)"
             git push origin ledger
