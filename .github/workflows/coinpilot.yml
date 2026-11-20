@@ -71,6 +71,10 @@ jobs:
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Repo variables route the analyst at any OpenAI-compatible endpoint
+          # (e.g. Groq). Empty when unset; the config defaults stand instead.
+          COINPILOT_LLM_BASE_URL: ${{ vars.COINPILOT_LLM_BASE_URL }}
+          COINPILOT_LLM_MODEL: ${{ vars.COINPILOT_LLM_MODEL }}
         run: python3 main.py once
 
       - name: Build swarm dashboard (React + three.js)
