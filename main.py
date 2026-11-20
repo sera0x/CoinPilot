@@ -381,7 +381,7 @@ def find_entries(settings: dict, connection) -> list[dict]:
     return opened
 
 
-def cycle(settings: dict, connection) -> dict:
+def cycle(settings: dict, connection, exits_only: bool = False) -> dict:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     store.bootstrap(connection, float(settings["risk"]["starting_cash_usd"]), today)
     store.rollover_day(connection, today)
@@ -391,6 +391,12 @@ def cycle(settings: dict, connection) -> dict:
     closed = manage_exits(settings, connection)
     if killed:
         log("kill switch file present: exits only, no new entries")
+        opened: list[dict] = []
+    elif exits_only:
+        # The fast pulse: meme coins move in seconds, so a second workflow
+        # re-checks every stop between full cycles. Discovery is the slow,
+        # rate-limited part and skipping it is what makes this cheap.
+        log("exits-only pulse: stops re-checked, no discovery this run")
         opened: list[dict] = []
     else:
         opened = find_entries(settings, connection)
@@ -609,7 +615,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--cycles", type=int, default=0, help="stop after N cycles (0 = run forever)")
     run_parser.add_argument("--interval", type=int, default=0, help="seconds between cycles")
 
-    sub.add_parser("once", help="run a single cycle")
+    once_parser = sub.add_parser("once", help="run a single cycle")
+    once_parser.add_argument(
+        "--exits-only",
+        action="store_true",
+        help="manage exits only: no discovery, no entries (the fast pulse)",
+    )
     sub.add_parser("status", help="show the paper portfolio")
     sub.add_parser("scan", help="print scored candidates without trading")
     sub.add_parser("doctor", help="check config, API reachability and the database")
@@ -634,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.command == "once":
         connection = store.connect(config.db_path(settings))
         try:
-            cycle(settings, connection)
+            cycle(settings, connection, exits_only=arguments.exits_only)
         finally:
             connection.close()
         return 0

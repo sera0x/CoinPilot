@@ -93,6 +93,7 @@ python3 selftest.py                     # offline checks: rules, paper fills, ri
 python3 main.py doctor                 # check config, feeds, database
 python3 main.py scan                   # print scored candidates, trade nothing
 python3 main.py once                   # one full cycle
+python3 main.py once --exits-only      # fast pulse: re-check stops, no discovery
 python3 main.py run --interval 300     # loop forever, 5 minutes apart
 python3 main.py status                 # portfolio, open positions, recent trades
 python3 main.py reset --yes            # wipe the paper account and start over
@@ -179,9 +180,17 @@ database is a single SQLite file you can copy anywhere.
 
 ### GitHub Actions (no other account needed)
 
-`.github/workflows/coinpilot.yml` runs `python3 main.py once` every 5 minutes
-on GitHub's servers (nothing to host, no VPS), keeps the SQLite ledger on a
-`ledger` branch (it survives runs), and builds a static dashboard every run.
+Two scheduled workflows run on GitHub's servers (nothing to host, no VPS):
+
+- `coinpilot.yml` — a full cycle every 5 minutes: discovery, scoring, entries,
+  the ledger kept on a `ledger` branch, and a dashboard deploy.
+- `coinpilot-pulse.yml` — an exits pulse every 2 minutes: `python3 main.py
+  once --exits-only` re-checks every stop (stop loss, take profit, trailing,
+  time expiry) plus the archive study and the auditor, with no discovery.
+  Meme coins can halve in one candle, so reaction time matters more than
+  shopping frequency — the pulse exists so a stop fires within ~2-4 minutes
+  of price touching it, worst case including GitHub's scheduler lag. Both
+  workflows share one concurrency group, so ledger writes never race.
 
 Seeing the dashboard:
 

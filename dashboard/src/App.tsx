@@ -5,6 +5,12 @@ import type { DashboardData } from "./types";
 
 const GROUPS = ["depth", "turnover", "pressure", "momentum1h", "momentum6h", "mania", "age", "extras"];
 
+const REPO = "sera0x/CoinPilot";
+// The pulse workflow commits a fresh data.json to the ledger branch every 2
+// minutes; the deployed Pages copy only refreshes on a full cycle. When the
+// local feed goes stale, the dashboard reads the ledger's copy directly.
+const LEDGER_DATA = `https://raw.githubusercontent.com/${REPO}/ledger/site/data.json`;
+
 const money = (v: number | null | undefined) =>
   v == null ? "—" : "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const compact = (v: number | null | undefined) => {
@@ -170,21 +176,39 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      fetch("./data.json", { cache: "no-store" })
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
-        })
-        .then((d) => {
-          if (alive) {
-            setData(d);
-            setError(null);
+    const loadFrom = async (url: string): Promise<DashboardData> => {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return (await r.json()) as DashboardData;
+    };
+    const apply = (d: DashboardData) => {
+      if (alive) {
+        setData(d);
+        setError(null);
+      }
+    };
+    const load = async () => {
+      try {
+        const local = await loadFrom("./data.json");
+        apply(local);
+        // Stale deployed feed (Pages redeploy lags the 2-minute pulse): fall
+        // through to the ledger branch's copy, which the pulse writes directly.
+        const age = (Date.now() - new Date(local.generated).getTime()) / 1000;
+        if (age > 180) {
+          try {
+            apply(await loadFrom(LEDGER_DATA));
+          } catch {
+            /* keep the local copy */
           }
-        })
-        .catch((e) => {
+        }
+      } catch {
+        try {
+          apply(await loadFrom(LEDGER_DATA));
+        } catch (e) {
           if (alive) setError(String(e));
-        });
+        }
+      }
+    };
     load();
     const timer = setInterval(load, 60_000);
     return () => {

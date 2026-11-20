@@ -1,0 +1,121 @@
+name: CoinPilot exits pulse
+
+# Full cycles (discovery + entries) run every 5 minutes via coinpilot.yml,
+# but meme coins move in seconds. This pulse runs every 2 minutes and manages
+# only exits — stop loss, take profit, trailing stop, time expiry — plus the
+# archive study and the auditor, with no discovery: that is what makes it fast.
+# It shares the cycle workflow's concurrency group so ledger writes never race.
+
+on:
+  schedule:
+    - cron: "*/2 * * * *" # GitHub schedules can lag a few minutes; this is best case
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coinpilot-cycle
+  cancel-in-progress: false
+
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore ledger (previous SQLite database)
+        run: |
+          git fetch origin ledger --depth=1 || true
+          if git show-ref --verify -q refs/remotes/origin/ledger; then
+            git checkout origin/ledger -- data/coinpilot.db
+            echo "ledger restored from origin/ledger"
+          else
+            echo "no ledger branch yet; starting a fresh paper account"
+          fi
+
+      - name: Exits pulse
+        id: pulse
+        continue-on-error: true
+        run: python3 main.py once --exits-only
+
+      - name: Build swarm dashboard (React + three.js)
+        id: swarm
+        continue-on-error: true
+        run: |
+          cd dashboard
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Static fallback if the swarm build failed
+        if: steps.swarm.outcome == 'failure'
+        run: python3 dashboard.py build --db data/coinpilot.db --out dist
+
+      - name: Attach data.json feed
+        run: |
+          mkdir -p dist
+          python3 dashboard.py data --db data/coinpilot.db --out dist
+
+      - name: Save ledger + dashboard copy to the ledger branch
+        run: |
+          git config user.name "coinpilot-bot"
+          git config user.email "bot@users.noreply.github.com"
+          cp data/coinpilot.db /tmp/coinpilot.db
+          mkdir -p /tmp/site && cp dist/index.html dist/data.json /tmp/site/
+          git fetch origin ledger --depth=1 || true
+          if git show-ref --verify -q refs/remotes/origin/ledger; then
+            git branch -f ledger origin/ledger
+            git switch -f ledger
+          else
+            git switch --orphan ledger
+          fi
+          mkdir -p data site
+          cp /tmp/coinpilot.db data/coinpilot.db
+          cp /tmp/site/index.html /tmp/site/data.json site/
+          # -f: the checked-out .gitignore ignores data/ even on this branch
+          git add -f data/coinpilot.db site/index.html site/data.json
+          if git status --porcelain | grep -q .; then
+            git commit -m "pulse: ledger + site $(date -u +%FT%TZ)"
+            git push origin ledger
+          else
+            echo "ledger unchanged; nothing to commit"
+          fi
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-pulse
+          path: dist
+
+      - name: Report a failed pulse
+        if: steps.pulse.outcome == 'failure'
+        run: |
+          echo "::error::the exits pulse failed; the ledger and dashboard were still saved"
+          exit 1
+
+  pages:
+    needs: pulse
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashboard-pulse
+          path: dist
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
