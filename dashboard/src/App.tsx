@@ -300,7 +300,7 @@ export default function App() {
 
         <Card title="Watchlist — what the swarm found" count={data?.watchlist.length ?? 0} delay={0.05}>
           {data && data.watchlist.length > 0 ? (
-            <div className="scroll-x">
+            <div className="scroll-y">
               <table>
                 <thead>
                   <tr><th>Score</th><th>Token</th><th>Liquidity</th><th>Vol 24h</th><th>Age</th><th>24h</th><th>Seen</th><th>Status</th><th>Credibility</th><th>Whale flow</th></tr>
@@ -331,6 +331,7 @@ export default function App() {
         <div className="grid two">
           <Card title="Recent trades" count={data?.trades.length ?? 0} delay={0.1}>
             {data && data.trades.length > 0 ? (
+              <div className="scroll-y">
               <table>
                 <thead>
                   <tr><th>When</th><th>Side</th><th>Token</th><th>USD</th><th>PnL</th><th>Reason</th></tr>
@@ -348,6 +349,7 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <p className="muted">No trades yet.</p>
             )}
@@ -355,6 +357,7 @@ export default function App() {
 
           <Card title="Analyst verdicts" count={data?.verdicts.length ?? 0} delay={0.15}>
             {data && data.verdicts.length > 0 ? (
+              <div className="scroll-y">
               <table>
                 <thead>
                   <tr><th>When</th><th>Token</th><th>Verdict</th><th>Thesis</th></tr>
@@ -370,6 +373,7 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <p className="muted">No verdicts yet.</p>
             )}

@@ -48,6 +48,34 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     host.appendChild(renderer.domElement);
 
+    // Soft glowing points with a hot core: bright enough to read on a phone
+    // held at arm's length, which the old 2px shader-dimmed version never was.
+    const material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute float aSize;
+        attribute vec3 aColor;
+        varying vec3 vColor;
+        void main() {
+          vColor = aColor;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = aSize * (240.0 / -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        varying vec3 vColor;
+        void main() {
+          vec2 uv = gl_PointCoord - 0.5;
+          float d = length(uv);
+          float halo = smoothstep(0.5, 0.05, d);
+          float core = smoothstep(0.18, 0.0, d);
+          float alpha = clamp(halo * halo + core * 0.9, 0.0, 1.0);
+          gl_FragColor = vec4(vColor * 1.3, alpha);
+        }`,
+    });
+
     const nodeCount = ROLES.length;
     const nodePos = ROLES.map(() => new THREE.Vector3());
     const total = ROLES.reduce((sum, r) => sum + r.count, 0);
@@ -73,10 +101,10 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
       speeds[i] = 0.12 + Math.random() * 0.18;
       swirl[i] = 1.2 + Math.random() * 0.8;
       colorObj.set(ROLES[src].color);
-      target[i * 3] = colorObj.r;
-      target[i * 3 + 1] = colorObj.g;
-      target[i * 3 + 2] = colorObj.b;
-      sizes[i] = 2 + Math.random() * 2;
+      target[i * 3] = colorObj.r * 1.25;
+      target[i * 3 + 1] = colorObj.g * 1.25;
+      target[i * 3 + 2] = colorObj.b * 1.25;
+      sizes[i] = 4.5 + Math.random() * 5;
     }
 
     for (let i = 0; i < total; i++) assign(i);
@@ -86,40 +114,38 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
-
-    const material = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexShader: `
-        attribute float aSize;
-        attribute vec3 aColor;
-        varying vec3 vColor;
-        void main() {
-          vColor = aColor;
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * (180.0 / -mv.z);
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader: `
-        varying vec3 vColor;
-        void main() {
-          vec2 uv = gl_PointCoord - 0.5;
-          float d = length(uv);
-          float alpha = smoothstep(0.5, 0.0, d);
-          alpha *= alpha;
-          gl_FragColor = vec4(vColor, alpha);
-        }`,
-    });
-
     scene.add(new THREE.Points(geometry, material));
+
+    // Ambient star-field: ~700 faint drifting specks so the hero reads as a
+    // living particle field even between trades.
+    const starCount = 700;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    const starCol = new Float32Array(starCount * 3);
+    const starSize = new Float32Array(starCount);
+    for (let i = 0; i < starCount; i++) {
+      starPos[i * 3] = (Math.random() - 0.5) * 18;
+      starPos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+      starPos[i * 3 + 2] = (Math.random() - 0.5) * 12;
+      const tint = Math.random() > 0.85 ? "#58a6ff" : "#c9d1d9";
+      colorObj.set(tint);
+      starCol[i * 3] = colorObj.r * 0.55;
+      starCol[i * 3 + 1] = colorObj.g * 0.55;
+      starCol[i * 3 + 2] = colorObj.b * 0.55;
+      starSize[i] = 1 + Math.random() * 2.2;
+    }
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute("aColor", new THREE.BufferAttribute(starCol, 3));
+    starGeo.setAttribute("aSize", new THREE.BufferAttribute(starSize, 1));
+    const stars = new THREE.Points(starGeo, material);
+    scene.add(stars);
 
     const glowGeo = new THREE.BufferGeometry();
     const glowPos = new Float32Array(nodeCount * 3);
     const glowCol = new Float32Array(nodeCount * 3);
     const glowTarget = new Float32Array(nodeCount * 3);
     const glowSize = new Float32Array(nodeCount);
-    for (let i = 0; i < nodeCount; i++) glowSize[i] = 16 + (i % 3) * 4;
+    for (let i = 0; i < nodeCount; i++) glowSize[i] = 30 + (i % 3) * 9;
     glowGeo.setAttribute("position", new THREE.BufferAttribute(glowPos, 3));
     glowGeo.setAttribute("aColor", new THREE.BufferAttribute(glowCol, 3));
     glowGeo.setAttribute("aSize", new THREE.BufferAttribute(glowSize, 1));
@@ -130,15 +156,15 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
       const healthy = stateRef.current.healthy;
       for (let i = 0; i < nodeCount; i++) {
         tmpColor.set(healthy ? ROLES[i].color : badColor(ROLES[i].color));
-        glowTarget[i * 3] = tmpColor.r;
-        glowTarget[i * 3 + 1] = tmpColor.g;
-        glowTarget[i * 3 + 2] = tmpColor.b;
+        glowTarget[i * 3] = tmpColor.r * 1.25;
+        glowTarget[i * 3 + 1] = tmpColor.g * 1.25;
+        glowTarget[i * 3 + 2] = tmpColor.b * 1.25;
       }
       for (let i = 0; i < total; i++) {
         tmpColor.set(healthy ? ROLES[fromIdx[i]].color : badColor(ROLES[fromIdx[i]].color));
-        target[i * 3] = tmpColor.r;
-        target[i * 3 + 1] = tmpColor.g;
-        target[i * 3 + 2] = tmpColor.b;
+        target[i * 3] = tmpColor.r * 1.25;
+        target[i * 3 + 1] = tmpColor.g * 1.25;
+        target[i * 3 + 2] = tmpColor.b * 1.25;
       }
     }
     updatePalette();
@@ -175,6 +201,7 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
       time += dt;
       const speedMul = (0.4 + stateRef.current.activity) * (reduced ? 0.15 : 1);
       scene.rotation.y += dt * 0.05;
+      stars.rotation.y -= dt * 0.02;
 
       for (let i = 0; i < nodeCount; i++) nodeWorld(i, nodePos[i]);
       for (let i = 0; i < nodeCount; i++) {
@@ -229,6 +256,7 @@ export default function Swarm({ activity, healthy }: { activity: number; healthy
       cancelAnimationFrame(raf);
       ro.disconnect();
       geometry.dispose();
+      starGeo.dispose();
       glowGeo.dispose();
       material.dispose();
       renderer.dispose();
