@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from coinpilot import http
 
-DEFAULT_RPC = "https://api.mainnet-beta.solana.com"
+DEFAULT_RPC = "https://solana-rpc.publicnode.com"
 
 
 def _rpc(url: str, method: str, params: list, timeout: int = 10):

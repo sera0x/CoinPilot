@@ -115,9 +115,30 @@ Any endpoint that speaks `POST /chat/completions` works:
 }
 ```
 
-Point `base_url` at a local llama.cpp server or OpenRouter and the bot does not
-care. `api_key_env` is the *name* of a shell variable, never a key written into
-a file. Set `"enabled": false` to run rules-only with no network calls besides
+Point `base_url` at any OpenAI-compatible endpoint and the bot does not
+care. On Actions, set these repo variables (Settings → Secrets and variables
+→ Actions → Variables) — no config file needs to be committed:
+
+- `COINPILOT_LLM_BASE_URL` and `COINPILOT_LLM_MODEL`, plus the secret
+  `OPENAI_API_KEY` holding that endpoint's key. The key itself is only
+  ever an Actions secret, never in the repo, never in the ledger, never
+  in the dashboard data.
+
+**Free options that cost nothing** (each gives a real key, no credit card):
+
+- **Groq** (recommended): console.groq.com → create a key → set
+  `COINPILOT_LLM_BASE_URL` = `https://api.groq.com/openai/v1`,
+  `COINPILOT_LLM_MODEL` = `llama-3.3-70b-versatile`, and
+  `OPENAI_API_KEY` = your Groq key. The free tier allows far more
+  requests per day than this bot needs (the analyst fires at most a few
+  calls per cycle), and `llama-3.3-70b` is well within what a JSON
+  buy/skip verdict on a market snapshot requires.
+- **Google AI Studio** (Gemini): aistudio.google.com → get API key →
+  base URL `https://generativelanguage.googleapis.com/v1beta/openai/`,
+  model `gemini-2.0-flash`. Free tier is generous; the key goes in the
+  same `OPENAI_API_KEY` secret.
+
+Set `"enabled": false` to run rules-only with no network calls besides
 market data.
 
 ## Configuration that matters
@@ -159,10 +180,12 @@ file to resume.
   assumption. Real fills on a moving meme coin can be much worse, and paper
   results are always optimistic.
 - RugCheck covers mint/freeze authority and its risk flags, and the whale-flow
-  pass measures top ex-pool wallet concentration over the public Solana RPC —
-  but only for the shortlist head, and only when the public RPC answers. There
-  is still no full holder-concentration or honeypot-simulation check. A paper
-  fill in a scam token looks like a good trade; a real one would not.
+  pass measures top ex-pool wallet concentration — through a keyless public
+  Solana RPC (`scan.rpc_url`, default `solana-rpc.publicnode.com`), which can
+  still throttle datacenter runners; when it does, the pass degrades to
+  "unavailable" rather than blocking anything. There is still no full
+  holder-concentration or honeypot-simulation check. A paper fill in a scam
+  token looks like a good trade; a real one would not.
 - The auditor changes its own parameters within hard bounds (+10/-6 on
   buy_score, one 2-point step, one change per 3 hours). That is self-tuning,
   not magic: it reads its own paper results, which are always optimistic.

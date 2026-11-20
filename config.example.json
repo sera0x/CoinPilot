@@ -25,7 +25,7 @@
       "BTC", "ETH", "SOL", "USDC", "USDT", "BNB", "XRP", "ADA", "AVAX", "LINK", "DOT", "MATIC", "TRX"
     ],
     "metas": [],
-    "rpc_url": "https://api.mainnet-beta.solana.com",
+    "rpc_url": "https://solana-rpc.publicnode.com",
     "user_agent": "",
     "max_leads": 120,
     "max_ticker_lookups": 25,

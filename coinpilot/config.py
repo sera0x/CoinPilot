@@ -48,7 +48,7 @@ DEFAULTS: dict = {
             "TRX",
         ],
         "metas": [],
-        "rpc_url": "https://api.mainnet-beta.solana.com",
+        "rpc_url": "https://solana-rpc.publicnode.com",
         "user_agent": "",
         "max_leads": 120,
         "max_ticker_lookups": 25,
@@ -123,6 +123,12 @@ def load_config(path: str | None = None) -> dict:
     if config_path is not None and config_path.exists():
         with open(config_path, encoding="utf-8") as handle:
             config = _deep_merge(config, json.load(handle))
+    # Environment overrides let a deployment (GitHub Actions variables) swap the
+    # model endpoint without committing a config file. The key itself stays a secret.
+    if os.environ.get("COINPILOT_LLM_BASE_URL"):
+        config["llm"]["base_url"] = os.environ["COINPILOT_LLM_BASE_URL"]
+    if os.environ.get("COINPILOT_LLM_MODEL"):
+        config["llm"]["model"] = os.environ["COINPILOT_LLM_MODEL"]
     _apply_audited_overrides(config)
     return config
 
