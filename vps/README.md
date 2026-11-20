@@ -45,6 +45,17 @@ dashboard regeneration cron. LLM config comes from `vps/coinpilot.env`
 (base URL, model, key — values are stripped of stray spaces by the bot, so
 paste artifacts can't break it).
 
+## Deploying it with an AI agent on the box
+
+If your VPS has an agent that can run commands, give it
+[agent-prompt.md](agent-prompt.md) — a complete step-by-step brief: clone,
+install, fill the Groq env file, verify, set up a cloudflared quick tunnel
+(dashboard reachable on a `https://<random>.trycloudflare.com` URL without
+opening any firewall ports), and report health. It can read the file straight
+from GitHub:
+`https://raw.githubusercontent.com/sera0x/CoinPilot/main/vps/agent-prompt.md`
+Rotate your Groq key before pasting it anywhere.
+
 ## What to do after it's live
 
 1. **Disable the two GitHub workflows** (Actions tab → each workflow → ⋯ →

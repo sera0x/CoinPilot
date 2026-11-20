@@ -389,7 +389,14 @@ export default function App() {
         </Card>
 
         <p className="foot">
-          Simulated fills only · no wallet · no keys · nothing is signed. A public paper ledger, not financial advice.
+          Simulated fills only · no wallet · no keys · nothing is signed. A public paper ledger, not financial advice.{" "}
+          <a href="https://github.com/sera0x/CoinPilot/blob/main/vps/README.md" target="_blank" rel="noopener">
+            Run it on your own VPS
+          </a>{" "}
+          ·{" "}
+          <a href="https://raw.githubusercontent.com/sera0x/CoinPilot/main/vps/agent-prompt.md" target="_blank" rel="noopener">
+            agent setup prompt
+          </a>
         </p>
       </main>
     </>
