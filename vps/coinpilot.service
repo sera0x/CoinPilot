@@ -1,0 +1,17 @@
+[Unit]
+Description=CoinPilot paper-trading bot (full cycle every 2 minutes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/CoinPilot
+# Secrets live in /opt/CoinPilot/vps/coinpilot.env (chmod 600), never in git.
+EnvironmentFile=-/opt/CoinPilot/vps/coinpilot.env
+ExecStart=/usr/bin/python3 /opt/CoinPilot/main.py run --interval 120
+Restart=always
+RestartSec=10
+# Hard ceiling so a leaky cycle can never crowd out the rest of the VPS.
+MemoryMax=180M
+
+[Install]
+WantedBy=multi-user.target

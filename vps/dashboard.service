@@ -1,0 +1,14 @@
+[Unit]
+Description=CoinPilot static dashboard (http://<vps-ip>:8080)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/CoinPilot
+ExecStart=/usr/bin/python3 -m http.server 8080 --directory /opt/CoinPilot/dist
+Restart=always
+RestartSec=10
+MemoryMax=40M
+
+[Install]
+WantedBy=multi-user.target

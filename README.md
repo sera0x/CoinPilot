@@ -201,6 +201,11 @@ run it on a computer, a Raspberry Pi or a small VPS. A scheduled job (cron,
 systemd timer, GitHub Actions) calling `python3 main.py once` is enough — the
 database is a single SQLite file you can copy anywhere.
 
+**Small VPS (recommended, ~50–170 MB RAM):** see [vps/README.md](vps/README.md)
+and `vps/install.sh` — one loop process every 2 minutes, a static dashboard on
+port 8080, your ledger and learning state carried over. A dedicated IP also
+un-throttles the whale-flow pass.
+
 ### GitHub Actions (no other account needed)
 
 Two scheduled workflows run on GitHub's servers (nothing to host, no VPS):
