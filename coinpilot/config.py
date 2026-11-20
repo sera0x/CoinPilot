@@ -124,11 +124,13 @@ def load_config(path: str | None = None) -> dict:
         with open(config_path, encoding="utf-8") as handle:
             config = _deep_merge(config, json.load(handle))
     # Environment overrides let a deployment (GitHub Actions variables) swap the
-    # model endpoint without committing a config file. The key itself stays a secret.
+    # model endpoint without committing a config file. The key itself stays a
+    # secret. Values are stripped: mobile keyboards and copy-paste love leaving
+    # a trailing space on a variable value, which turns a model name into a 404.
     if os.environ.get("COINPILOT_LLM_BASE_URL"):
-        config["llm"]["base_url"] = os.environ["COINPILOT_LLM_BASE_URL"]
+        config["llm"]["base_url"] = os.environ["COINPILOT_LLM_BASE_URL"].strip()
     if os.environ.get("COINPILOT_LLM_MODEL"):
-        config["llm"]["model"] = os.environ["COINPILOT_LLM_MODEL"]
+        config["llm"]["model"] = os.environ["COINPILOT_LLM_MODEL"].strip()
     _apply_audited_overrides(config)
     return config
 
